@@ -1,3 +1,5 @@
+pub mod block;
+pub mod tx;
 use std::fs;
 
 fn main() {
