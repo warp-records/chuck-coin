@@ -118,14 +118,10 @@ impl Block {
         let mut hasher = Sha3_256::new();
         //send the remainder of the last tx back to the user
         let split_last = balance > amount;
-        let spendable_iter = spendable.iter().take(spendable.len() - split_last as usize);
-        let spendable_iter_2 = spendable_iter.clone();
 
-        for (i, prev_output) in spendable_iter.enumerate() {
+        for prev_output in spendable.iter().take(spendable.len()-1) {
             hasher.update(prev_output.as_bytes());
-            self.utxo_set.insert(Outpoint(tx.txid, i as u16), (*prev_output).clone());
         }
-        hasher.update(amount.to_be_bytes());
 
         if split_last {
             let recipient_out = TxOutput {
@@ -141,19 +137,25 @@ impl Block {
                 recipient: recipient_pub,
             };
 
+            hasher.update(recipient_out.as_bytes());
+            hasher.update(remainder_out.as_bytes());
             tx.outputs.push(recipient_out);
             tx.outputs.push(remainder_out);
+        } else {
+            //don't feel like moving it lol
+            tx.outputs.push((*spendable.last().unwrap()).clone());
         }
 
-        tx.txid = hasher.finalize().try_into().unwrap();
+        hasher.update(amount.to_be_bytes());
+        tx.txid = hasher.finalize().into();
 
-        for (i, prev_output) in spendable_iter_2.enumerate() {
+        for (i, prev_output) in tx.outputs.iter().enumerate() {
+            self.utxo_set.insert(Outpoint(tx.txid, i as u16), (*prev_output).clone());
         }
         //have to split last output into two outputs
         //if the amounts dont match
 
-
-        Err(())
+        Ok(tx)
     }
 
 }
