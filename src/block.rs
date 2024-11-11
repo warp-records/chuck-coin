@@ -11,7 +11,8 @@ use k256::{
 
 
 //#[derive(Serialize, Deserialize, Debug)]
-pub struct BlockList {
+//will prune blocks later
+pub struct State {
     blocks: Vec<Block>,
 }
 
@@ -24,9 +25,10 @@ pub struct Block {
 }
 
 //lol XD
-//const TITTIES: Decimal = dec!(7177135);
-//const BOOBIES: Decimal = dec!(8008135);
-//consider using these constants in the project somehow
+//const TITTIES = 7177135;
+//const BOOBIES = 8008135;
+//consider using these as currency limits
+//or something in the project
 
 //this shit is hard
 impl Block {
@@ -41,6 +43,7 @@ impl Block {
         //verify hashes
         for tx in &self.txs {
             for (i, input) in tx.inputs.iter().enumerate() {
+                //check that all inputs being used exited previously
                 let Some(prev_out) = self.utxo_set.get(&input.prev_out) else {
                     //uh oh...
                     return false;
@@ -51,7 +54,9 @@ impl Block {
                     return false;
                 }
 
-                input_total += input.amount;
+                //pretty sure we DON'T have to check
+                //the amount from each individual spender
+                input_total += prev_out.amount;
             }
 
             for output in &tx.outputs {
@@ -71,11 +76,84 @@ impl Block {
     fn verify_sig(sig: Signature, predicate: &TxPredicate, tx: &Tx, idx: u64) -> bool {
         //better hasher for cryptographic applications
         let mut hasher = Sha3_256::new();
-        hasher.update(tx.as_bytes().as_slice());
+        //make sure this is compatible with the way txids
+       //are created in transact function
+        tx.inputs.iter().for_each(|input| { hasher.update(input.as_bytes()); });
+        tx.outputs.iter().for_each(|output| { hasher.update(output.as_bytes()); });
         hasher.update(idx.to_be_bytes());
         let message = hasher.finalize();
 
         let verifying_key = VerifyingKey::from(predicate.unwrap_key());
         verifying_key.verify(&message[..], &sig).is_ok()
     }
+
+    //must be executed on the spenders hardware
+    //since spender_priv is passed as an arugment
+    pub fn transact(&mut self, spender_priv: SecretKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
+        let spender_pub = spender_priv.public_key();
+
+        let mut balance: u64 = 0;
+        //I hope I'm doing this right lol
+        let mut spendable = Vec::new();
+        for tx in &self.txs {
+            for (i, old_output) in tx.outputs.iter().enumerate() {
+                if old_output.recipient == spender_pub && self.utxo_set.get(&Outpoint(tx.txid, i as u16)).is_none() {
+                    spendable.push(old_output);
+                    balance += old_output.amount;
+                    if balance >= amount { break; }
+                }
+            }
+
+            if balance >= amount { break; }
+        }
+
+        if amount > balance {
+            return Err(())
+        }
+
+
+        let mut tx = Tx::new();
+        let mut total: u64 = 0;
+
+        let mut hasher = Sha3_256::new();
+        //send the remainder of the last tx back to the user
+        let split_last = balance > amount;
+        let spendable_iter = spendable.iter().take(spendable.len() - split_last as usize);
+        let spendable_iter_2 = spendable_iter.clone();
+
+        for (i, prev_output) in spendable_iter.enumerate() {
+            hasher.update(prev_output.as_bytes());
+            self.utxo_set.insert(Outpoint(tx.txid, i as u16), (*prev_output).clone());
+        }
+        hasher.update(amount.to_be_bytes());
+
+        if split_last {
+            let recipient_out = TxOutput {
+                spender: TxPredicate::Pubkey(spender_pub),
+                amount: amount-(balance-spendable.last().unwrap().amount),
+                recipient: recipient_pub,
+            };
+
+            //sent back to the recipient
+            let remainder_out = TxOutput {
+                spender: TxPredicate::Pubkey(spender_pub),
+                amount: balance - amount,
+                recipient: recipient_pub,
+            };
+
+            tx.outputs.push(recipient_out);
+            tx.outputs.push(remainder_out);
+        }
+
+        tx.txid = hasher.finalize().try_into().unwrap();
+
+        for (i, prev_output) in spendable_iter_2.enumerate() {
+        }
+        //have to split last output into two outputs
+        //if the amounts dont match
+
+
+        Err(())
+    }
+
 }
