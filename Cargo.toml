@@ -3,10 +3,14 @@ name = "coin"
 version = "0.0.1"
 edition = "2021"
 license-file = "license.md"
-description = "Simple Adventure Time themed crypto currency"
+description = "Simple Chuck E Cheese themed crypto currency"
 
 [dependencies]
+bitvec = "1.0.1"
 ethnum = "1.5.0"
+hex = "0.4.3"
 k256 = "0.13.4"
+rand = "0.8.5"
+rand_core = "0.6.4"
 serde = { version = "1.0.214", features = ["derive"] }
 sha3 = "0.10.8"

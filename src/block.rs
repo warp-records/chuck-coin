@@ -1,6 +1,11 @@
+#![allow(unused_imports)]
+
+use bitvec::prelude::*;
+use std::hash::Hash;
 use crate::tx::*;
 use std::collections::HashMap;
 use ethnum::*;
+//use ethnum::U256::trailing_zeros;
 use serde::{Deserialize, Serialize};
 use sha3::*;
 use k256::{
@@ -9,6 +14,8 @@ use k256::{
     PublicKey,
 };
 
+type BLOCK_HASH = [u8; 32];
+const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 
 //#[derive(Serialize, Deserialize, Debug)]
 //will prune blocks later
@@ -18,9 +25,11 @@ pub struct State {
 
 //#[derive(Serialize, Deserialize, Debug)]
 pub struct Block {
+    //apparently the utxoset isn't supposed to belong
+    //to a particular block, look into this
     utxo_set: HashMap<Outpoint, TxOutput>,
-    prev_hash: u256,
-    nonce: u256,
+    prev_hash: u64,
+    nonce: u64,
     txs: Vec<Tx>,
 }
 
@@ -32,6 +41,7 @@ pub struct Block {
 
 //this shit is hard
 impl Block {
+    const WORK_DIFFICULTY: u64 = u64::max_value()/100000;
     const START_SUPPLY: u64 = 420 * 1_000_000;
     const TOTAL_SUPPLY: u64 = 69 * 1_000_000;
 
@@ -68,7 +78,7 @@ impl Block {
             }
         }
 
-        true
+        self.verify_work()
     }
 
     //check that signature equals the hash of tall transactions
@@ -113,7 +123,6 @@ impl Block {
 
 
         let mut tx = Tx::new();
-        let mut total: u64 = 0;
 
         let mut hasher = Sha3_256::new();
         //send the remainder of the last tx back to the user
@@ -158,4 +167,77 @@ impl Block {
         Ok(tx)
     }
 
+pub fn verify_work(&self) -> bool {
+
+        let mut hasher = Sha3_256::new();
+        hasher.update(self.as_bytes_no_nonce());
+
+        let block_hash = hasher.finalize_reset();
+
+        hasher.update(block_hash);
+        hasher.update(self.nonce.to_le_bytes());
+        let work_hash = hasher.finalize();
+        let work_hash_64 = u64::from_be_bytes(work_hash[0..8].try_into().unwrap());
+
+        work_hash_64 <= Self::WORK_DIFFICULTY
+    }
+
+    //pub fn block_work(hash: BLOCK_HASH) -> u64 {
+   //     const MAX_NONCE: u64 = u64::MAX;
+   //     let hash_64 = u64::from_be_bytes(hash[0..8].try_into().unwrap());
+   //     MAX_NONCE - hash_64
+   // }
+
+    pub fn mine(&self) -> u64 {
+        let mut nonce: u64 = 0;
+        let mut hasher = Sha3_256::new();
+
+        let block_hash = hasher.finalize_reset();
+        loop {
+            hasher.update(block_hash);
+            hasher.update(nonce.to_le_bytes());
+            let work_hash = hasher.finalize_reset();
+            let work_hash_64 = u64::from_be_bytes(work_hash[0..8].try_into().unwrap());
+
+            if work_hash_64 <= Self::WORK_DIFFICULTY {
+                return nonce;
+            }
+
+            nonce += 1;
+        }
+    }
+}
+
+impl Hash for Block {
+    //DONT hash nonce
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Skip utxo_set since it's not hashable
+        self.prev_hash.hash(state);
+        self.txs.hash(state);
+        for (outpoint, output) in &self.utxo_set {
+            outpoint.hash(state);
+            output.hash(state);
+        }
+    }
+}
+
+impl Block {
+    pub fn as_bytes_no_nonce(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Convert prev_hash to bytes
+        bytes.extend_from_slice(&self.prev_hash.to_be_bytes());
+        //bytes.extend_from_slice(&self.nonce.to_be_bytes());
+        // Convert txs to bytes
+        for tx in &self.txs {
+            bytes.extend(tx.as_bytes());
+        }
+        // Convert utxo_set to bytes
+        //this may not work
+        //for (outpoint, output) in &self.utxo_set {
+        //    bytes.extend(outpoint.as_bytes());
+        //    bytes.extend(output.as_bytes());
+       //}
+
+        bytes
+    }
 }

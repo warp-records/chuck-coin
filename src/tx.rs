@@ -1,7 +1,10 @@
+#![allow(unused_imports)]
+
+
 use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey}, elliptic_curve::sec1::ToEncodedPoint, PublicKey, SecretKey
 };
-use std::hash::Hash;
+use std::{hash::Hash, io::Read};
 
 //choose a better type later
 type Txid = [u8; 32];
@@ -90,6 +93,12 @@ impl TxOutput {
 
 }
 
+impl Hash for TxOutput {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_bytes().hash(state);
+    }
+}
+
 impl Tx {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -100,6 +109,7 @@ impl Tx {
             bytes.extend_from_slice(&output.as_bytes());
         }
         bytes.extend_from_slice(&self.signature.to_bytes());
+        bytes.extend_from_slice(&self.txid);
         bytes
     }
 
@@ -112,6 +122,22 @@ impl Tx {
         }
     }
 }
+
+impl Hash for Tx {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_bytes().hash(state);
+    }
+}
+
+impl Outpoint {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.0);
+        bytes.extend_from_slice(&self.1.to_be_bytes());
+        bytes
+    }
+}
+
 //thanks
 /*
 fn verify_tx(tx: &Tx, utxoset: &HashMap<Outpoint, UtxoData>) -> bool {
