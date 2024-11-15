@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use rand::prelude::*;
 use bitvec::prelude::*;
 use std::hash::Hash;
 use crate::tx::*;
@@ -27,10 +28,10 @@ pub struct State {
 pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
-    utxo_set: HashMap<Outpoint, TxOutput>,
-    prev_hash: u64,
-    nonce: u64,
-    txs: Vec<Tx>,
+    pub utxo_set: HashMap<Outpoint, TxOutput>,
+    pub prev_hash: u64,
+    pub nonce: u64,
+    pub txs: Vec<Tx>,
 }
 
 //lol XD
@@ -189,21 +190,25 @@ pub fn verify_work(&self) -> bool {
    // }
 
     pub fn mine(&self) -> u64 {
-        let mut nonce: u64 = 0;
+        let mut rng = rand::thread_rng();
+        let mut gold: u64 = 0;//rng.gen_range(0..Self::WORK_DIFFICULTY);
         let mut hasher = Sha3_256::new();
 
         let block_hash = hasher.finalize_reset();
         loop {
             hasher.update(block_hash);
-            hasher.update(nonce.to_le_bytes());
+            hasher.update(gold.to_le_bytes());
             let work_hash = hasher.finalize_reset();
             let work_hash_64 = u64::from_be_bytes(work_hash[0..8].try_into().unwrap());
 
             if work_hash_64 <= Self::WORK_DIFFICULTY {
-                return nonce;
+                return gold;
             }
 
-            nonce += 1;
+            gold += 1;
+            if gold > Self::WORK_DIFFICULTY {
+                gold = 0;
+            }
         }
     }
 }
