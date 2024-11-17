@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
-
-use crate::block::Block;
+use hex_literal::hex;
+use crate::block::*;
 use std::collections::HashMap;
 use std::fs;
 use std::time::{Duration, Instant, SystemTime};
@@ -19,15 +19,28 @@ fn main() {
         println!("Take a coin kiddo:\n");
         println!("{}", fs::read_to_string("asciiart.txt").unwrap());
 
-        let empty_block = Block {
+        let mut block = Block {
+            version: 0,
             utxo_set: HashMap::new(),
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
         };
 
-        let gold = empty_block.mine();
-        println!("Struck gold: {:X}", gold);
+        //block.transact();
+
+        //more fun to call it "gold" than nonce lol
+        //get it, because you're mining it...
+        let gold = block.mine();
+        println!("Struck gold: 0x{:X}", gold);
+
+}
+
+pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
+    let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
+    let verifying_key = VerifyingKey::from(signing_key.clone()); 
+
+    (signing_key, verifying_key)
 }
 
 pub fn create_keypair() {
@@ -37,4 +50,33 @@ pub fn create_keypair() {
     let verifying_key = VerifyingKey::from(signing_key.clone());
     println!("Private key: {} ", hex::encode_upper(signing_key.to_bytes()));
     println!("Public key: {}", hex::encode_upper(verifying_key.to_encoded_point(false).as_bytes()));
+}
+
+pub fn initial_block() -> Block {
+        let signing_key = fs::read_to_string("priv_key.txt");
+        let (signing_key, verifying_key) = keys_from_string(&signing_key.unwrap());
+    
+        let mut block = Block {
+            version: 0,
+            utxo_set: HashMap::new(),
+            prev_hash: 0,
+            nonce: 0,
+            txs: Vec::new(),
+        };
+
+
+        let intial_txo = TxOutput {
+            spender: 0x00,
+            amount: Block::START_SUPPLY,
+            recipient: verifying_key,
+        };
+
+        let initial_intput = TxInput {
+            signature: signing_key.sign(prev_out),
+            prev_out: 
+        }
+
+        block.utxo_set.insert();
+
+        block
 }

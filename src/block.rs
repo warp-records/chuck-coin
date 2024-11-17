@@ -28,10 +28,62 @@ pub struct State {
 pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
-    pub utxo_set: HashMap<Outpoint, TxOutput>,
+    pub version: u64,
     pub prev_hash: u64,
     pub nonce: u64,
     pub txs: Vec<Tx>,
+}
+
+
+impl State {
+    //TODO:
+    //verify supply
+    //verify prevhash
+    pub fn verify_all_blocks(&self) -> bool {
+        let mut utxo_set = HashMap<Outpoint, TxOutput>; 
+        let mut block_iter = block.iter();
+        let mut prev_block = block_iter.next().unwrap();
+
+        while let Some(block) = block_iter.next() {
+            //keep track of balances
+            let mut input_total: u64 = 0;
+            let mut output_total: u64 = 0;
+
+            //verify hashes
+            for tx in &block.txs {
+                for (i, input) in tx.inputs.iter().enumerate() {
+                    //check that all inputs being used exited previously
+                    let Some(prev_out) = utxo_set.get(&input.prev_out) else {
+                        //uh oh...
+                        return false;
+                    };
+
+                    if !Block::verify_sig(input.signature, &prev_out.spender, &tx, i as u64) {
+                        //nice try hackers
+                        return false;
+                    }
+
+                    //pretty sure we DON'T have to check
+                    //the amount from each individual spender
+                    input_total += prev_out.amount;
+                }
+
+                for output in &tx.outputs {
+                    output_total += output.amount;
+                }
+
+                if input_total < output_total {
+                    return false;
+                }
+            }
+
+            if !block.verify_work() {
+                return false;
+            }
+        }
+
+        true;
+    }
 }
 
 //lol XD
@@ -42,49 +94,16 @@ pub struct Block {
 
 //this shit is hard
 impl Block {
-    const WORK_DIFFICULTY: u64 = u64::max_value()/100000;
-    const START_SUPPLY: u64 = 420 * 1_000_000;
-    const TOTAL_SUPPLY: u64 = 69 * 1_000_000;
-
-    pub fn verify_blockchain(&self) -> bool {
-        //keep track of balances
-        let mut input_total: u64 = 0;
-        let mut output_total: u64 = 0;
-
-        //verify hashes
-        for tx in &self.txs {
-            for (i, input) in tx.inputs.iter().enumerate() {
-                //check that all inputs being used exited previously
-                let Some(prev_out) = self.utxo_set.get(&input.prev_out) else {
-                    //uh oh...
-                    return false;
-                };
-
-                if !Self::verify_sig(input.signature, &prev_out.spender, &tx, i as u64) {
-                    //nice try hackers
-                    return false;
-                }
-
-                //pretty sure we DON'T have to check
-                //the amount from each individual spender
-                input_total += prev_out.amount;
-            }
-
-            for output in &tx.outputs {
-                output_total += output.amount;
-            }
-
-            if input_total < output_total {
-                return false;
-            }
-        }
-
-        self.verify_work()
-    }
+    //This is all my i7 can do quickly ToT
+    pub const WORK_DIFFICULTY: u64 = u64::max_value()/100_000;
+    //one pizza is one one millionth of a coin, or 1/10^6
+    pub const START_SUPPLY: u64 = 69 * 1_000_000;
+    pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
+    
 
     //check that signature equals the hash of tall transactions
     //and the transaction index combined, all signed by the spender
-    fn verify_sig(sig: Signature, predicate: &TxPredicate, tx: &Tx, idx: u64) -> bool {
+    pub fn verify_sig(sig: Signature, predicate: &TxPredicate, tx: &Tx, idx: u64) -> bool {
         //better hasher for cryptographic applications
         let mut hasher = Sha3_256::new();
         //make sure this is compatible with the way txids
@@ -100,15 +119,22 @@ impl Block {
 
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
-    pub fn transact(&mut self, spender_priv: SecretKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
+    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SecretKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
         let spender_pub = spender_priv.public_key();
+        let mut new_tx = Tx::new();
 
         let mut balance: u64 = 0;
         //I hope I'm doing this right lol
-        let mut spendable = Vec::new();
-        for tx in &self.txs {
-            for (i, old_output) in tx.outputs.iter().enumerate() {
-                if old_output.recipient == spender_pub && self.utxo_set.get(&Outpoint(tx.txid, i as u16)).is_none() {
+        let mut spendable: Vec<TxOutput> = Vec::new();
+        for old_tx in &self.txs {
+            for (i, old_output) in old_tx.outputs.iter().enumerate() {
+                if old_output.recipient == spender_pub && self.utxo_set.get(&Outpoint(self.tx.txid, i as u16)).is_none() {
+                    let prev_out = Outpoint(old_tx.txid, i);
+                    new_tx.push(TxInput {
+                        prev_out: prev_out,
+                        signature: spender_priv.sign(prev_out),
+                    });
+
                     spendable.push(old_output);
                     balance += old_output.amount;
                     if balance >= amount { break; }
@@ -121,9 +147,6 @@ impl Block {
         if amount > balance {
             return Err(())
         }
-
-
-        let mut tx = Tx::new();
 
         let mut hasher = Sha3_256::new();
         //send the remainder of the last tx back to the user
@@ -149,18 +172,18 @@ impl Block {
 
             hasher.update(recipient_out.as_bytes());
             hasher.update(remainder_out.as_bytes());
-            tx.outputs.push(recipient_out);
-            tx.outputs.push(remainder_out);
+            new_tx.outputs.push(recipient_out);
+            new_tx.outputs.push(remainder_out);
         } else {
             //don't feel like moving it lol
-            tx.outputs.push((*spendable.last().unwrap()).clone());
+            new_tx.outputs.push((*spendable.last().unwrap()).clone());
         }
 
         hasher.update(amount.to_be_bytes());
-        tx.txid = hasher.finalize().into();
+        new_tx.txid = hasher.finalize().into();
 
-        for (i, prev_output) in tx.outputs.iter().enumerate() {
-            self.utxo_set.insert(Outpoint(tx.txid, i as u16), (*prev_output).clone());
+        for (i, prev_output) in new_tx.outputs.iter().enumerate() {
+            self.utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*prev_output).clone());
         }
         //have to split last output into two outputs
         //if the amounts dont match
@@ -168,7 +191,7 @@ impl Block {
         Ok(tx)
     }
 
-pub fn verify_work(&self) -> bool {
+    pub fn verify_work(&self) -> bool {
 
         let mut hasher = Sha3_256::new();
         hasher.update(self.as_bytes_no_nonce());
@@ -194,6 +217,7 @@ pub fn verify_work(&self) -> bool {
         let mut gold: u64 = 0;//rng.gen_range(0..Self::WORK_DIFFICULTY);
         let mut hasher = Sha3_256::new();
 
+        hasher.update(&self.as_bytes_no_nonce());
         let block_hash = hasher.finalize_reset();
         loop {
             hasher.update(block_hash);
@@ -213,10 +237,17 @@ pub fn verify_work(&self) -> bool {
     }
 }
 
+impl State {
+    fn verify_blockchain() -> bool {
+
+    }
+}
+
 impl Hash for Block {
     //DONT hash nonce
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // Skip utxo_set since it's not hashable
+        self.version.hash(state);
         self.prev_hash.hash(state);
         self.txs.hash(state);
         for (outpoint, output) in &self.utxo_set {

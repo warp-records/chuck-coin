@@ -17,24 +17,23 @@ pub struct TxOutput {
     pub spender: TxPredicate,
     //amount is one one millionth of a coin (1 / 10^6)
     pub amount: u64,
-
-    //Txid is Sha3_256 hash of:
-    //- all input txs as_bytes()
-    //- amount to_be_bytes()
-    //- spender to_sec1_bytes()
-    //- recipient to_sec1_bytes()
-    //in THAT ORDER
     pub recipient: PublicKey,
 }
 
 
-//pretty sure the u16 is just an index into the transaction inputs
+//the second parameter u16 is just an index into the transaction outputs
 //TxOutputs are converted into Outpoints so the key doesn't have
 //to be stored
 #[derive(Hash, PartialEq, Eq)]
 pub struct Outpoint(pub Txid, pub u16);
 
 pub struct TxInput {
+    //point of the signature here
+    //is so you can verify that the spender
+    //signed this transaction
+
+    //signature of the outpoint
+    //which contains the PREVIOUS Txid followed by u16
     pub signature: Signature,
     pub prev_out: Outpoint,
 }
@@ -43,10 +42,11 @@ pub struct TxInput {
 pub struct Tx {
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
-    pub txid: Txid,
     //hash signed by the spender of:
     //tx.inputs.as_bytes()
     //tx.outputs.as_bytes()
+    pub txid: Txid,
+    //signature of txid, which is the hash
     pub signature: Signature,
 }
 
@@ -75,11 +75,10 @@ impl TxInput {
         bytes
     }
 }
-
+                    spendable.push(old_output);
+                    balance += old_output.amount;
 impl TxOutput {
 
-    //used to hash all other data besides txid
-    // necessary for creating txid in the first place
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         match &self.spender {
