@@ -15,7 +15,7 @@ use k256::{
     PublicKey,
 };
 
-type BLOCK_HASH = [u8; 32];
+type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 
 //#[derive(Serialize, Deserialize, Debug)]
@@ -40,8 +40,8 @@ impl State {
     //verify supply
     //verify prevhash
     pub fn verify_all_blocks(&self) -> bool {
-        let mut utxo_set = HashMap<Outpoint, TxOutput>; 
-        let mut block_iter = block.iter();
+        let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
+        let mut block_iter = self.blocks.iter();
         let mut prev_block = block_iter.next().unwrap();
 
         while let Some(block) = block_iter.next() {
@@ -82,7 +82,7 @@ impl State {
             }
         }
 
-        true;
+        true
     }
 }
 
@@ -99,7 +99,7 @@ impl Block {
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
-    
+
 
     //check that signature equals the hash of tall transactions
     //and the transaction index combined, all signed by the spender
@@ -119,8 +119,8 @@ impl Block {
 
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
-    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SecretKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
-        let spender_pub = spender_priv.public_key();
+    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SigningKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
+        let spender_pub: PublicKey = VerifyingKey::from(spender_priv.clone()).into();
         let mut new_tx = Tx::new();
 
         let mut balance: u64 = 0;
@@ -128,14 +128,14 @@ impl Block {
         let mut spendable: Vec<TxOutput> = Vec::new();
         for old_tx in &self.txs {
             for (i, old_output) in old_tx.outputs.iter().enumerate() {
-                if old_output.recipient == spender_pub && self.utxo_set.get(&Outpoint(self.tx.txid, i as u16)).is_none() {
-                    let prev_out = Outpoint(old_tx.txid, i);
-                    new_tx.push(TxInput {
+                let prev_out = Outpoint(old_tx.txid, i as u16);
+                if old_output.recipient == spender_pub && utxo_set.get(&prev_out).is_none() {
+                    new_tx.inputs.push(TxInput {
+                        signature: spender_priv.sign(&prev_out.as_bytes()),
                         prev_out: prev_out,
-                        signature: spender_priv.sign(prev_out),
                     });
 
-                    spendable.push(old_output);
+                    spendable.push(old_output.clone());
                     balance += old_output.amount;
                     if balance >= amount { break; }
                 }
@@ -183,12 +183,12 @@ impl Block {
         new_tx.txid = hasher.finalize().into();
 
         for (i, prev_output) in new_tx.outputs.iter().enumerate() {
-            self.utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*prev_output).clone());
+            utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*prev_output).clone());
         }
         //have to split last output into two outputs
         //if the amounts dont match
 
-        Ok(tx)
+        Ok(new_tx)
     }
 
     pub fn verify_work(&self) -> bool {
@@ -214,7 +214,7 @@ impl Block {
 
     pub fn mine(&self) -> u64 {
         let mut rng = rand::thread_rng();
-        let mut gold: u64 = 0;//rng.gen_range(0..Self::WORK_DIFFICULTY);
+        let mut gold: u64 = rng.gen_range(0..Self::WORK_DIFFICULTY);
         let mut hasher = Sha3_256::new();
 
         hasher.update(&self.as_bytes_no_nonce());
@@ -237,12 +237,13 @@ impl Block {
     }
 }
 
+/*
 impl State {
     fn verify_blockchain() -> bool {
 
     }
 }
-
+ */
 impl Hash for Block {
     //DONT hash nonce
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -250,10 +251,6 @@ impl Hash for Block {
         self.version.hash(state);
         self.prev_hash.hash(state);
         self.txs.hash(state);
-        for (outpoint, output) in &self.utxo_set {
-            outpoint.hash(state);
-            output.hash(state);
-        }
     }
 }
 

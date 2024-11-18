@@ -7,8 +7,8 @@ use k256::{
 use std::{hash::Hash, io::Read};
 
 //choose a better type later
-type Txid = [u8; 32];
-const EMPTY_TXID: Txid = [0; 32];
+pub type Txid = [u8; 32];
+pub const EMPTY_TXID: Txid = [0; 32];
 
 #[derive(Clone)]
 pub struct TxOutput {
@@ -61,7 +61,6 @@ impl TxPredicate {
     pub fn unwrap_key(&self) -> &PublicKey {
         match &self {
             TxPredicate::Pubkey(key) => &key,
-            _ => panic!(),
         }
     }
 }
@@ -75,8 +74,7 @@ impl TxInput {
         bytes
     }
 }
-                    spendable.push(old_output);
-                    balance += old_output.amount;
+
 impl TxOutput {
 
     pub fn as_bytes(&self) -> Vec<u8> {

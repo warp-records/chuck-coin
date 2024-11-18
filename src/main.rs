@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use hex_literal::hex;
 use crate::block::*;
+use crate::tx::*;
 use std::collections::HashMap;
 use std::fs;
 use std::time::{Duration, Instant, SystemTime};
@@ -21,7 +22,6 @@ fn main() {
 
         let mut block = Block {
             version: 0,
-            utxo_set: HashMap::new(),
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
@@ -38,7 +38,7 @@ fn main() {
 
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
-    let verifying_key = VerifyingKey::from(signing_key.clone()); 
+    let verifying_key = VerifyingKey::from(signing_key.clone());
 
     (signing_key, verifying_key)
 }
@@ -54,29 +54,28 @@ pub fn create_keypair() {
 
 pub fn initial_block() -> Block {
         let signing_key = fs::read_to_string("priv_key.txt");
-        let (signing_key, verifying_key) = keys_from_string(&signing_key.unwrap());
-    
+        let (signing_key, verifying_key) = keys_from_str(&signing_key.unwrap());
+
         let mut block = Block {
             version: 0,
-            utxo_set: HashMap::new(),
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
         };
 
 
+        /*
         let intial_txo = TxOutput {
             spender: 0x00,
             amount: Block::START_SUPPLY,
             recipient: verifying_key,
         };
 
+
         let initial_intput = TxInput {
             signature: signing_key.sign(prev_out),
-            prev_out: 
-        }
-
-        block.utxo_set.insert();
-
+            prev_out: Outpoint(EMPTY_TXID, 0)
+        };
+ */
         block
 }
