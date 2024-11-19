@@ -24,9 +24,10 @@ pub struct TxOutput {
 //the second parameter u16 is just an index into the transaction outputs
 //TxOutputs are converted into Outpoints so the key doesn't have
 //to be stored
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Clone)]
 pub struct Outpoint(pub Txid, pub u16);
 
+#[derive(Clone)]
 pub struct TxInput {
     //point of the signature here
     //is so you can verify that the spender
@@ -39,10 +40,11 @@ pub struct TxInput {
 }
 
 
+#[derive(Clone)]
 pub struct Tx {
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
-    //hash signed by the spender of:
+    //hash of:
     //tx.inputs.as_bytes()
     //tx.outputs.as_bytes()
     pub txid: Txid,
@@ -68,7 +70,7 @@ impl TxPredicate {
 impl TxInput {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.signature.to_bytes());
+        //bytes.extend_from_slice(&self.signature.to_bytes());
         bytes.extend_from_slice(&self.prev_out.0);
         bytes.extend_from_slice(&self.prev_out.1.to_be_bytes());
         bytes

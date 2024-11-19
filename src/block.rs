@@ -17,11 +17,12 @@ use k256::{
 
 type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
+const BLANK_TXID: [u8; 32] = [0; 32];
 
 //#[derive(Serialize, Deserialize, Debug)]
 //will prune blocks later
 pub struct State {
-    blocks: Vec<Block>,
+    pub blocks: Vec<Block>,
 }
 
 //#[derive(Serialize, Deserialize, Debug)]
@@ -42,7 +43,14 @@ impl State {
     pub fn verify_all_blocks(&self) -> bool {
         let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut block_iter = self.blocks.iter();
+
         let mut prev_block = block_iter.next().unwrap();
+        let root_tx = prev_block.txs[0].clone();
+        if prev_block.txs.len() > 1 || root_tx.outputs.len() > 1 {
+            panic!("Expected a single root transaction with a single txo");
+        }
+
+        utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
         while let Some(block) = block_iter.next() {
             //keep track of balances
@@ -214,6 +222,8 @@ impl Block {
 
     pub fn mine(&self) -> u64 {
         let mut rng = rand::thread_rng();
+        //start at a random spot so not all
+        //nodes are mining from the same spot
         let mut gold: u64 = rng.gen_range(0..Self::WORK_DIFFICULTY);
         let mut hasher = Sha3_256::new();
 
