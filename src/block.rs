@@ -52,7 +52,7 @@ impl State {
     //- and a signature of an empty slice
     //- with an empty TXID
     pub fn verify_all_blocks(&self) -> bool {
-        let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
+        //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut block_iter = self.blocks.iter();
 
         let mut prev_block = block_iter.next().unwrap();
@@ -61,7 +61,7 @@ impl State {
             panic!("Expected a single root transaction with a single txo");
         }
 
-        utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
+        //utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
         while let Some(block) = block_iter.next() {
             //keep track of balances
@@ -74,7 +74,7 @@ impl State {
 
                 for (i, input) in tx.inputs.iter().enumerate() {
                     //check that all inputs being used exited previously
-                    let Some(prev_out) = utxo_set.get(&input.prev_out) else {
+                    let Some(prev_out) = self.utxo_set.get(&input.prev_out) else {
                         //uh oh...
                         return false;
                     };
@@ -133,15 +133,16 @@ impl Block {
 
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
-    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SigningKey, recipient_pub: PublicKey, amount: u64) -> Result<Tx, ()> {
+    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SigningKey, recipient_pub: PublicKey, amount: u64) -> Result<&Tx, ()> {
         let spender_pub: PublicKey = VerifyingKey::from(spender_priv.clone()).into();
+
         let mut new_tx = Tx::new();
 
         let mut balance: u64 = 0;
         //I hope I'm doing this right lol
         let mut spendable: Vec<TxOutput> = Vec::new();
         for old_tx in &self.txs {
-            for (i, old_output) in old_tx.outputs.iter().enumerate() {
+            for (i, old_output) in utxo_set.values().enumerate() {
                 let prev_out = Outpoint(old_tx.txid, i as u16);
                 if old_output.recipient == spender_pub && utxo_set.get(&prev_out).is_none() {
                     new_tx.inputs.push(TxInput {
@@ -194,8 +195,9 @@ impl Block {
         }
         //have to split last output into two outputs
         //if the amounts dont match
+        self.txs.push(new_tx);
 
-        Ok(new_tx)
+        Ok(&self.txs.last().unwrap())
     }
 
     pub fn verify_work(&self) -> bool {
@@ -315,7 +317,9 @@ impl State {
         };
 
         root_tx.outputs.push(root_txo.clone());
-        utxo_set.insert(Outpoint(EMPTY_TXID, 0), root_txo.clone());
+        //can't use outpoint as it's own input,
+        //or else the txo will be marked as sp/ent
+        utxo_set.insert(Outpoint([1; 32], 0), root_txo.clone());
 
         block.txs.push(root_tx);
         Self {

@@ -37,18 +37,28 @@ mod tests {
         let second_verifying_key = VerifyingKey::from(signing_key.clone());
 
         let mut state = State::with_inital_block();
-        let new_tx = state.blocks[0].transact(&mut state.utxo_set,
-            signing_key,
-            PublicKey::from(second_verifying_key),
-            1_000_000,
-        ).expect("TX Failed");
+
         let mut new_block = Block {
             version: 0,
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
         };
+
+        let new_tx = state.blocks[0].transact(&mut state.utxo_set,
+            signing_key.clone(),
+            PublicKey::from(second_verifying_key),
+            1_000_000,
+        ).expect("TX Failed");
         new_block.txs.push(new_tx);
+
+        let new_tx = new_block.transact(&mut state.utxo_set,
+            signing_key,
+            PublicKey::from(second_verifying_key),
+            2_000_000,
+        ).expect("TX Failed");
+        new_block.txs.push(new_tx);
+
 
         state.blocks.push(new_block);
 
