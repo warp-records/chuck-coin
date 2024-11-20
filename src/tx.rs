@@ -4,6 +4,7 @@
 use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey}, elliptic_curve::sec1::ToEncodedPoint, PublicKey, SecretKey
 };
+use sha3::*;
 use std::{hash::Hash, io::Read};
 
 //choose a better type later
@@ -110,6 +111,22 @@ impl Tx {
         bytes.extend_from_slice(&self.signature.to_bytes());
         bytes.extend_from_slice(&self.txid);
         bytes
+    }
+
+    //sign only the inputs and outputs
+    pub fn get_txid(&self) -> Txid {
+        let mut bytes = Vec::new();
+        for input in &self.inputs {
+            bytes.extend_from_slice(&input.as_bytes());
+        }
+        for output in &self.outputs {
+            bytes.extend_from_slice(&output.as_bytes());
+        }
+
+        let mut hasher = Sha3_256::new();
+        hasher.update(bytes);
+
+        hasher.finalize().into()
     }
 
     pub fn new() -> Self {

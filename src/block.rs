@@ -156,13 +156,8 @@ impl Block {
             return Err(())
         }
 
-        let mut hasher = Sha3_256::new();
         //send the remainder of the last tx back to the user
         let split_last = balance > amount;
-
-        for prev_output in spendable.iter().take(spendable.len()-1) {
-            hasher.update(prev_output.as_bytes());
-        }
 
         if split_last {
             let recipient_out = TxOutput {
@@ -178,8 +173,6 @@ impl Block {
                 recipient: recipient_pub,
             };
 
-            hasher.update(recipient_out.as_bytes());
-            hasher.update(remainder_out.as_bytes());
             new_tx.outputs.push(recipient_out);
             new_tx.outputs.push(remainder_out);
         } else {
@@ -187,8 +180,8 @@ impl Block {
             new_tx.outputs.push((*spendable.last().unwrap()).clone());
         }
 
-        hasher.update(amount.to_be_bytes());
-        new_tx.txid = hasher.finalize().into();
+        new_tx.txid = new_tx.get_txid();
+        new_tx.signature = spender_priv.sign(&new_tx.txid);
 
         for (i, prev_output) in new_tx.outputs.iter().enumerate() {
             utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*prev_output).clone());

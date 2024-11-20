@@ -27,6 +27,7 @@ fn main() {
             txs: Vec::new(),
         };
 
+        create_keypair();
         //block.transact();
 
         //more fun to call it "gold" than nonce lol
@@ -39,6 +40,9 @@ fn main() {
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
     let verifying_key = VerifyingKey::from(signing_key.clone());
+
+    println!("Private key: {} ", hex::encode_upper(signing_key.to_bytes()));
+    println!("Public key: {}", hex::encode_upper(verifying_key.to_sec1_bytes()));
 
     (signing_key, verifying_key)
 }

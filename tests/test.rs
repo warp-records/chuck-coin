@@ -8,9 +8,16 @@ use k256::{
     SecretKey,
 };
 
+pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
+    let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
+    let verifying_key = VerifyingKey::from(signing_key.clone());
+
+    (signing_key, verifying_key)
+}
+
 #[cfg(test)]
 mod tests {
-    use std::iter::empty;
+    use std::{fs, iter::empty};
 
     use k256::PublicKey;
 
@@ -29,10 +36,13 @@ mod tests {
             txs: Vec::new(),
         };
 
-        let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from_sec1_bytes(hex::decode("04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A7").unwrap().as_slice()).unwrap();
+        let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+
+        let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from(verifying_key);
+
         let root_txo = TxOutput {
             amount: Block::START_SUPPLY,
-            spender: TxPredicate::Pubkey(PublicKey::from_sec1_bytes(&[]).unwrap()),
+            spender: TxPredicate::Pubkey(MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH),
             //I'M RICH
             recipient: MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH,
         };
@@ -41,7 +51,7 @@ mod tests {
            inputs: Vec::new(),
            outputs: Vec::new(),
            txid: EMPTY_TXID,
-           signature: Signature::from_slice(&[]).unwrap(),
+           signature: signing_key.sign(&[]),
         };
 
         root_tx.outputs.push(root_txo);
