@@ -130,11 +130,12 @@ impl Tx {
     }
 
     pub fn new() -> Self {
+        //let blank_sig =
         Self {
             inputs: Vec::new(),
             outputs: Vec::new(),
             txid: EMPTY_TXID,
-            signature: Signature::from_slice(&[0u8; 64]).unwrap(),
+            signature: Signature::from_slice(&[128u8; 64]).unwrap(),
         }
     }
 }

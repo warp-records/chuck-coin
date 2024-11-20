@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use std::fs;
 use rand::prelude::*;
 use bitvec::prelude::*;
 use std::hash::Hash;
@@ -23,6 +24,7 @@ const BLANK_TXID: [u8; 32] = [0; 32];
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
+    pub utxo_set: HashMap<Outpoint, TxOutput>
 }
 
 //#[derive(Serialize, Deserialize, Debug)]
@@ -40,6 +42,15 @@ impl State {
     //TODO:
     //verify supply
     //verify prevhash
+
+    //creates a State with a single block which:
+    //- has one block
+    //- with one transaction
+    //- and one transaction output
+    //- with an amount of START_SUPPLY
+    //- sent and recieved by the keyholder of private_key.txt
+    //- and a signature of an empty slice
+    //- with an empty TXID
     pub fn verify_all_blocks(&self) -> bool {
         let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut block_iter = self.blocks.iter();
@@ -59,6 +70,8 @@ impl State {
 
             //verify hashes
             for tx in &block.txs {
+                let txid = tx.get_txid();
+
                 for (i, input) in tx.inputs.iter().enumerate() {
                     //check that all inputs being used exited previously
                     let Some(prev_out) = utxo_set.get(&input.prev_out) else {
@@ -66,7 +79,8 @@ impl State {
                         return false;
                     };
 
-                    if !Block::verify_sig(input.signature, &prev_out.spender, &tx, i as u64) {
+
+                    if !Block::verify_sig(input.signature, &prev_out.spender, &Outpoint(txid, i as u16)) {
                         //nice try hackers
                         return false;
                     }
@@ -111,18 +125,10 @@ impl Block {
 
     //check that signature equals the hash of tall transactions
     //and the transaction index combined, all signed by the spender
-    pub fn verify_sig(sig: Signature, predicate: &TxPredicate, tx: &Tx, idx: u64) -> bool {
-        //better hasher for cryptographic applications
-        let mut hasher = Sha3_256::new();
-        //make sure this is compatible with the way txids
-       //are created in transact function
-        tx.inputs.iter().for_each(|input| { hasher.update(input.as_bytes()); });
-        tx.outputs.iter().for_each(|output| { hasher.update(output.as_bytes()); });
-        hasher.update(idx.to_be_bytes());
-        let message = hasher.finalize();
+    pub fn verify_sig(sig: Signature, predicate: &TxPredicate, prev_out: &Outpoint) -> bool {
 
         let verifying_key = VerifyingKey::from(predicate.unwrap_key());
-        verifying_key.verify(&message[..], &sig).is_ok()
+        verifying_key.verify(&prev_out.as_bytes(), &sig).is_ok()
     }
 
     //must be executed on the spenders hardware
@@ -275,5 +281,46 @@ impl Block {
        //}
 
         bytes
+    }
+}
+
+impl State {
+    pub fn with_inital_block() -> Self {
+        let mut utxo_set = HashMap::new();
+        let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
+        let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
+        let verifying_key = VerifyingKey::from(signing_key.clone());
+
+        let mut block = Block {
+            version: 0,
+            prev_hash: 0,
+            nonce: 0,
+            txs: Vec::new(),
+        };
+
+        let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from(verifying_key);
+
+        let root_txo = TxOutput {
+            amount: Block::START_SUPPLY,
+            spender: TxPredicate::Pubkey(MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH),
+            //I'M RICH
+            recipient: MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH,
+        };
+
+        let mut root_tx = Tx {
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            txid: EMPTY_TXID,
+            signature: signing_key.sign(&[]),
+        };
+
+        root_tx.outputs.push(root_txo.clone());
+        utxo_set.insert(Outpoint(EMPTY_TXID, 0), root_txo.clone());
+
+        block.txs.push(root_tx);
+        Self {
+            blocks: vec![block],
+            utxo_set,
+        }
     }
 }

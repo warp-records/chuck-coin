@@ -2,7 +2,7 @@
 use coin;
 use coin::block::*;
 use coin::tx::*;
-
+use rand_core::OsRng;
 use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
     SecretKey,
@@ -17,46 +17,41 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, iter::empty};
+    use std::{collections::HashMap, env::consts::OS, fs, iter::empty};
 
     use k256::PublicKey;
 
     use super::*;
 
     #[test]
-    fn verify_blockchain() {
-        let mut state = State {
-            blocks: Vec::new(),
-        };
+    fn first_block() {
+        let state = State::with_inital_block();
+        assert!(state.verify_all_blocks());
+    }
 
-        let mut block = Block {
+    #[test]
+    fn test_transaction() {
+        let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+
+        let second_signing_key = SigningKey::random(&mut OsRng);
+        let second_verifying_key = VerifyingKey::from(signing_key.clone());
+
+        let mut state = State::with_inital_block();
+        let new_tx = state.blocks[0].transact(&mut state.utxo_set,
+            signing_key,
+            PublicKey::from(second_verifying_key),
+            1_000_000,
+        ).expect("TX Failed");
+        let mut new_block = Block {
             version: 0,
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
         };
+        new_block.txs.push(new_tx);
 
-        let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+        state.blocks.push(new_block);
 
-        let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from(verifying_key);
-
-        let root_txo = TxOutput {
-            amount: Block::START_SUPPLY,
-            spender: TxPredicate::Pubkey(MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH),
-            //I'M RICH
-            recipient: MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH,
-        };
-
-        let mut root_tx = Tx {
-           inputs: Vec::new(),
-           outputs: Vec::new(),
-           txid: EMPTY_TXID,
-           signature: signing_key.sign(&[]),
-        };
-
-        root_tx.outputs.push(root_txo);
-
-        state.blocks.push(block);
         assert!(state.verify_all_blocks());
     }
 }
