@@ -21,13 +21,10 @@ fn main() {
         println!("{}", fs::read_to_string("asciiart.txt").unwrap());
 
         let mut state = State::with_inital_block();
+        let mut new_block = Block::new();
 
-        let mut new_block = Block {
-            version: 0,
-            prev_hash: 0,
-            nonce: 0,
-            txs: Vec::new(),
-        };
+        let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+        new_block.transact(&mut state.utxo_set, signing_key, recipient_pub, amount);
 
         //more fun to call it "gold" than nonce lol
         //get it, because you're mining it...
