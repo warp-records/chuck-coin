@@ -30,6 +30,7 @@ pub struct State {
 }
 
 //#[derive(Serialize, Deserialize, Debug)]
+#[derive(PartialEq)]
 pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
@@ -366,50 +367,5 @@ impl State {
             blocks: vec![block],
             utxo_set,
         }
-    }
-}
-
-
-
-
-
-
-//SERDE stuff
-impl Serialize for Block {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Block", 4)?;
-        state.serialize_field("version", &self.version)?;
-        state.serialize_field("prev_hash", &self.prev_hash)?;
-        state.serialize_field("nonce", &self.nonce)?;
-        state.serialize_field("txs", &self.txs)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Block {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct BlockHelper {
-            version: u64,
-            prev_hash: u64,
-            nonce: u64,
-            txs: Vec<Tx>,
-        }
-
-        let helper = BlockHelper::deserialize(deserializer)?;
-
-        Ok(Block {
-            version: helper.version,
-            prev_hash: helper.prev_hash,
-            nonce: helper.nonce,
-            txs: helper.txs,
-        })
     }
 }

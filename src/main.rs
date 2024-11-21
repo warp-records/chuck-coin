@@ -11,9 +11,13 @@ use k256::{
     SecretKey,
 };
 use rand_core::OsRng;
+use serde_json;
+use std::io::{Read, Write};
+use serde::{Serialize, Deserialize};
 
 pub mod tx;
 pub mod block;
+pub mod serde_impl;
 
 fn main() {
         println!("Chuck coin: where a kid can be a kid!");
@@ -24,8 +28,21 @@ fn main() {
         let mut new_block = Block::new();
 
         let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
-        //new_block.transact(&mut state.utxo_set, signing_key, recipient_pub, amount);
 
+        let serialized = serde_json::to_string(&new_block).unwrap();
+        std::fs::write("block.json", serialized).unwrap();
+
+        // To read a block from a file:
+        let json_str = std::fs::read_to_string("block.json").unwrap();
+        let block: Block = serde_json::from_str(&json_str).unwrap();
+
+        // To serialize to bytes instead of JSON string:
+        let serialized_bytes = serde_json::to_vec(&block).unwrap();
+
+        // To deserialize from bytes:
+        let imported_block: Block = serde_json::from_slice(&serialized_bytes).unwrap();
+
+        assert!(imported_block == new_block);
         //more fun to call it "gold" than nonce lol
         //get it, because you're mining it...
         let gold = new_block.mine();
