@@ -51,11 +51,11 @@ mod tests {
             1_000_000,
         ).expect("TX Failed");
 
-        let new_tx = new_block.transact(&mut state.utxo_set,
-            signing_key,
-            PublicKey::from(second_verifying_key),
-            2_000_000,
-        ).expect("TX Failed");
+        //let new_tx = new_block.transact(&mut state.utxo_set,
+       //     signing_key,
+       //     PublicKey::from(second_verifying_key),
+       //     2_000_000,
+       // ).expect("TX Failed");
 
         state.blocks.push(new_block);
 

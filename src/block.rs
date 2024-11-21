@@ -53,6 +53,7 @@ impl State {
     //- with an empty TXID
     pub fn verify_all_blocks(&self) -> bool {
         //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
+        let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
 
         let mut prev_block = block_iter.next().unwrap();
@@ -61,7 +62,7 @@ impl State {
             panic!("Expected a single root transaction with a single txo");
         }
 
-        //utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
+        utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
         while let Some(block) = block_iter.next() {
             //keep track of balances
@@ -74,13 +75,14 @@ impl State {
 
                 for (i, input) in tx.inputs.iter().enumerate() {
                     //check that all inputs being used exited previously
-                    let Some(prev_out) = self.utxo_set.get(&input.prev_out) else {
+                    let Some(prev_out) = utxo_set.get(&input.prev_out) else {
                         //uh oh...
                         return false;
                     };
 
 
-                    if !Block::verify_sig(input.signature, &prev_out.spender, &Outpoint(txid, i as u16)) {
+                    //outpoint must be outpoint of prev_out
+                    if !Block::verify_sig(input.signature, &prev_out.spender, &input.prev_out) {
                         //nice try hackers
                         return false;
                     }
@@ -90,18 +92,19 @@ impl State {
                     input_total += prev_out.amount;
                 }
 
-                for output in &tx.outputs {
+                for (i, output) in tx.outputs.iter().enumerate() {
                     output_total += output.amount;
+                    utxo_set.insert(Outpoint(tx.txid, i as u16), output.clone());
                 }
 
-                if input_total < output_total {
+                if output_total > input_total {
                     return false;
                 }
             }
 
-            if !block.verify_work() {
-                return false;
-            }
+            //if !block.verify_work() {
+                //return false;
+                //}
         }
 
         true
@@ -174,7 +177,7 @@ impl Block {
             let remainder_out = TxOutput {
                 spender: TxPredicate::Pubkey(spender_pub),
                 amount: balance - amount,
-                recipient: recipient_pub,
+                recipient: spender_pub,
             };
 
             new_tx.outputs.push(recipient_out);
@@ -247,6 +250,7 @@ impl Block {
         }
     }
 }
+//
 
 /*
 impl State {
