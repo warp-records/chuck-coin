@@ -114,9 +114,25 @@ mod tests {
                 &mut state.utxo_set,
                 signing_key.clone(),
                 PublicKey::from(other_verifying_key),
-                20_000_000,
+                10_000_000,
         );
         assert!(tx_result.is_ok());
+
+        let tx_result = new_block.transact(
+                &mut state.utxo_set,
+                other_signing_key.clone(),
+                PublicKey::from(verifying_key),
+                1_000_000,
+        );
+        assert!(tx_result.is_ok());
+
+        let tx_result = new_block.transact(
+                &mut state.utxo_set,
+                other_signing_key.clone(),
+                PublicKey::from(verifying_key),
+                100_000_000,
+        );
+        assert!(tx_result.is_err());
 
         new_block.nonce = new_block.mine();
         state.blocks.push(new_block);

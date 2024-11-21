@@ -139,10 +139,10 @@ impl Block {
 
     pub fn new() -> Self {
         Self {
-                version: 0,
-                prev_hash: 0,
-                nonce: 0,
-                txs: Vec::new(),
+            version: 0,
+            prev_hash: 0,
+            nonce: 0,
+            txs: Vec::new(),
         }
     }
 
@@ -178,13 +178,16 @@ impl Block {
             }
         }
 
-
         if amount > balance {
             return Err(())
         }
 
         //send the remainder of the last tx back to the user
         let split_last = balance > amount;
+
+        for output in spendable.iter().take(spendable.len() - 1) {
+            new_tx.outputs.push(output.clone());
+        }
 
         if split_last {
             let recipient_out = TxOutput {
