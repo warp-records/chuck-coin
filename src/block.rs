@@ -144,7 +144,7 @@ impl Block {
         for old_tx in &self.txs {
             for (i, old_output) in utxo_set.values().enumerate() {
                 let prev_out = Outpoint(old_tx.txid, i as u16);
-                if old_output.recipient == spender_pub && utxo_set.get(&prev_out).is_none() {
+                if old_output.recipient == spender_pub {
                     new_tx.inputs.push(TxInput {
                         signature: spender_priv.sign(&prev_out.as_bytes()),
                         prev_out: prev_out,
@@ -156,7 +156,6 @@ impl Block {
                 }
             }
 
-            if balance >= amount { break; }
         }
 
         if amount > balance {
@@ -190,8 +189,8 @@ impl Block {
         new_tx.txid = new_tx.get_txid();
         new_tx.signature = spender_priv.sign(&new_tx.txid);
 
-        for (i, prev_output) in new_tx.outputs.iter().enumerate() {
-            utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*prev_output).clone());
+        for (i, output) in new_tx.outputs.iter().enumerate() {
+            utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*output).clone());
         }
         //have to split last output into two outputs
         //if the amounts dont match
@@ -302,7 +301,7 @@ impl State {
 
         let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from(verifying_key);
 
-        let root_txo = TxOutput {
+        let root_output = TxOutput {
             amount: Block::START_SUPPLY,
             spender: TxPredicate::Pubkey(MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH),
             //I'M RICH
@@ -316,10 +315,11 @@ impl State {
             signature: signing_key.sign(&[]),
         };
 
-        root_tx.outputs.push(root_txo.clone());
-        //can't use outpoint as it's own input,
-        //or else the txo will be marked as sp/ent
-        utxo_set.insert(Outpoint([1; 32], 0), root_txo.clone());
+        root_tx.txid = root_tx.get_txid();
+        root_tx.signature = signing_key.sign(&root_tx.txid);
+        root_tx.outputs.push(root_output.clone());
+
+        utxo_set.insert(Outpoint(root_tx.txid, 0), root_output.clone());
 
         block.txs.push(root_tx);
         Self {
