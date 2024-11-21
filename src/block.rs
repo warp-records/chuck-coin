@@ -93,7 +93,7 @@ impl State {
 
 
                     //outpoint must be outpoint of prev_out
-                    if !Block::verify_sig(input.signature, &prev_out.spender, &input.prev_out) {
+                    if !Block::verify_sig(input.signature, &TxPredicate::Pubkey(prev_out.recipient), &input.prev_out) {
                         //nice try hackers
                         return Err(BlockErr::Sig(input.signature));
                     }
@@ -186,7 +186,11 @@ impl Block {
         let split_last = balance > amount;
 
         for output in spendable.iter().take(spendable.len() - 1) {
-            new_tx.outputs.push(output.clone());
+            let mut new_output = output.clone();
+            new_output.spender = TxPredicate::Pubkey(spender_pub.clone());
+            new_output.recipient = recipient_pub.clone();
+
+            new_tx.outputs.push(new_output);
         }
 
         if split_last {
@@ -207,7 +211,12 @@ impl Block {
             new_tx.outputs.push(remainder_out);
         } else {
             //don't feel like moving it lol
-            new_tx.outputs.push((*spendable.last().unwrap()).clone());
+            let output = TxOutput {
+                spender: TxPredicate::Pubkey(spender_pub),
+                amount: spendable.last().unwrap().amount,
+                recipient: spender_pub,
+            };
+            new_tx.outputs.push(output);
         }
 
         new_tx.txid = new_tx.get_txid();
@@ -216,6 +225,7 @@ impl Block {
         for input in new_tx.inputs.iter() {
             utxo_set.remove(&input.prev_out);
         }
+        //critical part
         for (i, output) in new_tx.outputs.iter().enumerate() {
             utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*output).clone());
         }

@@ -53,7 +53,8 @@ mod tests {
         let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
         let other_signing_key = SigningKey::random(&mut OsRng);
-        let other_verifying_key = VerifyingKey::from(signing_key.clone());
+        //HOW THE FUCK did I mess this up
+        let other_verifying_key = VerifyingKey::from(other_signing_key.clone());
 
         let mut new_block = Block {
             version: 0,
@@ -66,7 +67,7 @@ mod tests {
                 &mut state.utxo_set,
                 signing_key.clone(),
                 PublicKey::from(other_verifying_key),
-                1_000_000
+                10_000_000
         );
         assert!(tx_result.is_ok());
 
@@ -96,9 +97,9 @@ mod tests {
 
         let tx_result = new_block.transact(
                 &mut state.utxo_set,
-                signing_key.clone(),
-                PublicKey::from(other_verifying_key),
-                2_000_000
+                other_signing_key.clone(),
+                PublicKey::from(verifying_key),
+                1_000_000
         );
         assert!(tx_result.is_ok());
 
@@ -122,9 +123,19 @@ mod tests {
                 &mut state.utxo_set,
                 other_signing_key.clone(),
                 PublicKey::from(verifying_key),
-                1_000_000,
+                2_000_000,
         );
+        print!("ok");
         assert!(tx_result.is_ok());
+
+        //15 mil by now
+        //anotheeerrr test
+        let tx_result = new_block.transact(
+                &mut state.utxo_set,
+                other_signing_key.clone(),
+                PublicKey::from(verifying_key),
+                5_000_000,
+        );
 
         let tx_result = new_block.transact(
                 &mut state.utxo_set,
@@ -136,8 +147,9 @@ mod tests {
 
         new_block.nonce = new_block.mine();
         state.blocks.push(new_block);
+        let result = state.verify_all_blocks();
 
-        assert!(state.verify_all_blocks().is_ok());
+        assert!(result.is_ok());
         (state, (signing_key, verifying_key), (other_signing_key, other_verifying_key))
 
     }

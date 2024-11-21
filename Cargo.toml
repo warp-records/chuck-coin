@@ -1,6 +1,6 @@
 [package]
 name = "coin"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license-file = "license.md"
 description = "Simple Chuck E Cheese themed crypto currency"
