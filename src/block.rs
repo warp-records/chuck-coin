@@ -148,7 +148,7 @@ impl Block {
             let prev_out = utxo_set.get(outpoint).unwrap();
             if prev_out.recipient == spender_pub {
                 new_tx.inputs.push(TxInput {
-                    signature: spender_priv.sign(&prev_out.as_bytes()),
+                    signature: spender_priv.sign(&outpoint.as_bytes()),
                     prev_out: outpoint.clone(),
                 });
 
