@@ -141,22 +141,20 @@ impl Block {
         let mut balance: u64 = 0;
         //I hope I'm doing this right lol
         let mut spendable: Vec<TxOutput> = Vec::new();
-        for old_tx in &self.txs {
-            for (i, old_output) in utxo_set.values().enumerate() {
-                let prev_out = Outpoint(old_tx.txid, i as u16);
-                if old_output.recipient == spender_pub {
-                    new_tx.inputs.push(TxInput {
-                        signature: spender_priv.sign(&prev_out.as_bytes()),
-                        prev_out: prev_out,
-                    });
+        for outpoint in utxo_set.keys() {
+            let prev_out = utxo_set.get(outpoint).unwrap();
+            if prev_out.recipient == spender_pub {
+                new_tx.inputs.push(TxInput {
+                    signature: spender_priv.sign(&prev_out.as_bytes()),
+                    prev_out: outpoint.clone(),
+                });
 
-                    spendable.push(old_output.clone());
-                    balance += old_output.amount;
-                    if balance >= amount { break; }
-                }
+                spendable.push(prev_out.clone());
+                balance += prev_out.amount;
+                if balance >= amount { break; }
             }
-
         }
+
 
         if amount > balance {
             return Err(())
@@ -189,6 +187,9 @@ impl Block {
         new_tx.txid = new_tx.get_txid();
         new_tx.signature = spender_priv.sign(&new_tx.txid);
 
+        for input in new_tx.inputs.iter() {
+            utxo_set.remove(&input.prev_out);
+        }
         for (i, output) in new_tx.outputs.iter().enumerate() {
             utxo_set.insert(Outpoint(new_tx.txid, i as u16), (*output).clone());
         }
