@@ -20,21 +20,19 @@ fn main() {
         println!("Take a coin kiddo:\n");
         println!("{}", fs::read_to_string("asciiart.txt").unwrap());
 
-        let mut block = Block {
+        let mut state = State::with_inital_block();
+
+        let mut new_block = Block {
             version: 0,
             prev_hash: 0,
             nonce: 0,
             txs: Vec::new(),
         };
 
-        create_keypair();
-        //block.transact();
-
         //more fun to call it "gold" than nonce lol
         //get it, because you're mining it...
-        let gold = block.mine();
+        let gold = new_block.mine();
         println!("Struck gold: 0x{:X}", gold);
-
 }
 
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {

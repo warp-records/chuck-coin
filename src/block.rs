@@ -37,6 +37,17 @@ pub struct Block {
     pub txs: Vec<Tx>,
 }
 
+pub enum BlockErr {
+    //erroneous nonce
+    Nonce(u64),
+    //erroneous signature
+    Sig(Signature),
+    //input amount, output amount
+    Overspend(u64, u64),
+    //erroneous start supply
+    Supply(u64),
+    DoubleSpend,
+}
 
 impl State {
     //TODO:
@@ -51,7 +62,7 @@ impl State {
     //- sent and recieved by the keyholder of private_key.txt
     //- and a signature of an empty slice
     //- with an empty TXID
-    pub fn verify_all_blocks(&self) -> bool {
+    pub fn verify_all_blocks(&self) -> Result<(), BlockErr> {
         //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
@@ -77,14 +88,14 @@ impl State {
                     //check that all inputs being used exited previously
                     let Some(prev_out) = utxo_set.get(&input.prev_out) else {
                         //uh oh...
-                        return false;
+                        return Err(BlockErr::DoubleSpend);
                     };
 
 
                     //outpoint must be outpoint of prev_out
                     if !Block::verify_sig(input.signature, &prev_out.spender, &input.prev_out) {
                         //nice try hackers
-                        return false;
+                        return Err(BlockErr::Sig(input.signature));
                     }
 
                     //pretty sure we DON'T have to check
@@ -98,16 +109,16 @@ impl State {
                 }
 
                 if output_total > input_total {
-                    return false;
+                    return Err(BlockErr::Overspend(input_total, output_total));
                 }
             }
 
-            //if !block.verify_work() {
-                //return false;
-                //}
+            if !block.verify_work() {
+                return Err(BlockErr::Nonce(block.nonce));
+            }
         }
 
-        true
+        Ok(())
     }
 }
 
@@ -120,11 +131,20 @@ impl State {
 //this shit is hard
 impl Block {
     //This is all my i7 can do quickly ToT
-    pub const WORK_DIFFICULTY: u64 = u64::max_value()/100_000;
+    //temporarily make it really easy for testing
+    pub const WORK_DIFFICULTY: u64 = u64::max_value()/1_000;
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
 
+    pub fn new() -> Self {
+        Self {
+                version: 0,
+                prev_hash: 0,
+                nonce: 0,
+                txs: Vec::new(),
+        }
+    }
 
     //check that signature equals the hash of tall transactions
     //and the transaction index combined, all signed by the spender
