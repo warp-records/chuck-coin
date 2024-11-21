@@ -33,6 +33,11 @@ mod tests {
         multiple_transactions();
     }
 
+    #[test]
+    fn test_bad_nonce() {
+        bad_nonce();
+    }
+
     //have to pass the state of other tests to reuse the code
     //ToT
     fn first_block() -> State {
@@ -76,7 +81,7 @@ mod tests {
         )
     }
 
-    fn multiple_transactions() {
+    fn multiple_transactions() -> (State, (SigningKey, VerifyingKey), (SigningKey, VerifyingKey)) {
         let (mut state,
             (signing_key, verifying_key),
             (other_signing_key, other_verifying_key),
@@ -113,9 +118,28 @@ mod tests {
         );
         assert!(tx_result.is_ok());
 
-        new_block.nonce = u64::MAX;
+        new_block.nonce = new_block.mine();
         state.blocks.push(new_block);
 
-        assert!(state.verify_all_blocks().is_err());
+        assert!(state.verify_all_blocks().is_ok());
+        (state, (signing_key, verifying_key), (other_signing_key, other_verifying_key))
+
     }
+
+    pub fn bad_nonce() -> (State, (SigningKey, VerifyingKey), (SigningKey, VerifyingKey)) {
+        let (mut state, (signing_key, verifying_key), (other_signing_key, other_verifying_key)) = multiple_transactions();
+
+        let mut last_block = state.blocks.pop().unwrap();
+        last_block.nonce = 0;
+        state.blocks.push(last_block);
+        assert!(state.verify_all_blocks().is_err());
+
+        last_block = state.blocks.pop().unwrap();
+        last_block.nonce = last_block.mine();
+        state.blocks.push(last_block);
+        assert!(state.verify_all_blocks().is_ok());
+
+        (state, (signing_key, verifying_key), (other_signing_key, other_verifying_key))
+    }
+
 }
