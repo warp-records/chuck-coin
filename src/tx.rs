@@ -1,4 +1,8 @@
 #![allow(unused_imports)]
+use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::Serializer;
+use std::fmt;
 
 use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey}, elliptic_curve::sec1::ToEncodedPoint, PublicKey, SecretKey
@@ -81,12 +85,14 @@ impl TxOutput {
 
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
+
         match &self.spender {
             TxPredicate::Pubkey(key) => {
                 bytes.extend_from_slice(&key.to_encoded_point(false).as_bytes());
             }
         }
         bytes.extend_from_slice(&self.amount.to_be_bytes());
+        bytes.extend_from_slice(&self.recipient.to_sec1_bytes());
         bytes
     }
 
@@ -127,6 +133,7 @@ impl Tx {
 
         hasher.finalize().into()
     }
+
 
     pub fn new() -> Self {
         //let blank_sig =
@@ -174,3 +181,137 @@ fn verify_tx(tx: &Tx, utxoset: &HashMap<Outpoint, UtxoData>) -> bool {
   in_val >= out_val
 }
  */
+
+ //thank you claude!
+ impl Serialize for TxInput {
+     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+     where
+         S: Serializer,
+     {
+         use serde::ser::SerializeStruct;
+         let mut state = serializer.serialize_struct("TxInput", 2)?;
+         state.serialize_field("signature", &self.signature.to_bytes().to_vec())?;
+         state.serialize_field("prev_out", &self.prev_out.as_bytes())?;
+         state.end()
+     }
+ }
+
+ impl<'de> Deserialize<'de> for TxInput {
+     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+     where
+         D: Deserializer<'de>,
+     {
+         #[derive(Deserialize)]
+         struct TxInputHelper {
+             signature: Vec<u8>,
+             prev_out: Vec<u8>,
+         }
+
+         let helper = TxInputHelper::deserialize(deserializer)?;
+
+         let signature = Signature::from_slice(&helper.signature)
+             .map_err(de::Error::custom)?;
+
+         let mut txid = [0u8; 32];
+         txid.copy_from_slice(&helper.prev_out[..32]);
+         let index = u16::from_be_bytes([helper.prev_out[32], helper.prev_out[33]]);
+
+         Ok(TxInput {
+             signature,
+             prev_out: Outpoint(txid, index),
+         })
+     }
+ }
+
+
+
+ impl Serialize for TxOutput {
+     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+     where
+         S: Serializer,
+     {
+         use serde::ser::SerializeStruct;
+         let mut state = serializer.serialize_struct("TxOutput", 3)?;
+         match &self.spender {
+             TxPredicate::Pubkey(key) => {
+                 state.serialize_field("spender", &key.to_encoded_point(false).as_bytes().to_vec())?;
+             }
+         }
+         state.serialize_field("amount", &self.amount)?;
+         state.serialize_field("recipient", &self.recipient.to_encoded_point(false).as_bytes().to_vec())?;
+         state.end()
+     }
+ }
+
+ impl<'de> Deserialize<'de> for TxOutput {
+     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+     where
+         D: Deserializer<'de>,
+     {
+         #[derive(Deserialize)]
+         struct TxOutputHelper {
+             spender: Vec<u8>,
+             amount: u64,
+             recipient: Vec<u8>,
+         }
+
+         let helper = TxOutputHelper::deserialize(deserializer)?;
+
+         let spender_key = PublicKey::from_sec1_bytes(&helper.spender)
+             .map_err(de::Error::custom)?;
+
+         let recipient = PublicKey::from_sec1_bytes(&helper.recipient)
+             .map_err(de::Error::custom)?;
+
+         Ok(TxOutput {
+             spender: TxPredicate::Pubkey(spender_key),
+             amount: helper.amount,
+             recipient,
+         })
+     }
+ }
+
+ impl Serialize for Tx {
+     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+     where
+         S: Serializer,
+     {
+         use serde::ser::SerializeStruct;
+         let mut state = serializer.serialize_struct("Tx", 4)?;
+         state.serialize_field("inputs", &self.inputs)?;
+         state.serialize_field("outputs", &self.outputs)?;
+         state.serialize_field("txid", &self.txid.to_vec())?;
+         state.serialize_field("signature", &self.signature.to_bytes().to_vec())?;
+         state.end()
+     }
+ }
+
+ impl<'de> Deserialize<'de> for Tx {
+     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+     where
+         D: Deserializer<'de>,
+     {
+         #[derive(Deserialize)]
+         struct TxHelper {
+             inputs: Vec<TxInput>,
+             outputs: Vec<TxOutput>,
+             txid: Vec<u8>,
+             signature: Vec<u8>,
+         }
+
+         let helper = TxHelper::deserialize(deserializer)?;
+
+         let mut txid = [0u8; 32];
+         txid.copy_from_slice(&helper.txid);
+
+         let signature = Signature::from_slice(&helper.signature)
+             .map_err(de::Error::custom)?;
+
+         Ok(Tx {
+             inputs: helper.inputs,
+             outputs: helper.outputs,
+             txid,
+             signature,
+         })
+     }
+ }

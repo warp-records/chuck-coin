@@ -8,7 +8,9 @@ use crate::tx::*;
 use std::collections::HashMap;
 use ethnum::*;
 //use ethnum::U256::trailing_zeros;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
+use serde::ser::Serializer;
+use serde::de::{self, Deserializer};
 use sha3::*;
 use k256::{
     ecdsa::{SigningKey, signature::Verifier, VerifyingKey, Signature, signature::Signer},
@@ -20,7 +22,7 @@ type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 const BLANK_TXID: [u8; 32] = [0; 32];
 
-//#[derive(Serialize, Deserialize, Debug)]
+//#[derive(Serialize, Deserialize)]
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
@@ -364,5 +366,50 @@ impl State {
             blocks: vec![block],
             utxo_set,
         }
+    }
+}
+
+
+
+
+
+
+//SERDE stuff
+impl Serialize for Block {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Block", 4)?;
+        state.serialize_field("version", &self.version)?;
+        state.serialize_field("prev_hash", &self.prev_hash)?;
+        state.serialize_field("nonce", &self.nonce)?;
+        state.serialize_field("txs", &self.txs)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Block {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct BlockHelper {
+            version: u64,
+            prev_hash: u64,
+            nonce: u64,
+            txs: Vec<Tx>,
+        }
+
+        let helper = BlockHelper::deserialize(deserializer)?;
+
+        Ok(Block {
+            version: helper.version,
+            prev_hash: helper.prev_hash,
+            nonce: helper.nonce,
+            txs: helper.txs,
+        })
     }
 }

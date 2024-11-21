@@ -6,6 +6,7 @@ license-file = "license.md"
 description = "Simple Chuck E Cheese themed crypto currency"
 
 [dependencies]
+base64 = "0.22.1"
 bitvec = "1.0.1"
 ethnum = "1.5.0"
 hex = "0.4.3"
@@ -15,4 +16,5 @@ rand = "0.8.5"
 rand_core = "0.6.4"
 random = "0.14.0"
 serde = { version = "1.0.214", features = ["derive"] }
+serde_json = "1.0.133"
 sha3 = "0.10.8"
