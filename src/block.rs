@@ -55,7 +55,6 @@ pub enum BlockErr {
 impl State {
     //TODO:
     //verify supply
-    //verify prevhash
 
     //creates a State with a single block which:
     //- has one block
