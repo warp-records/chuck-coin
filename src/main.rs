@@ -26,7 +26,6 @@ fn main() {
         let mut state = State::with_inital_block();
         let mut new_block = Block::new();
 
-
         //use my own key here
         let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
         let (other_signing, other_verifying) = create_keypair();
