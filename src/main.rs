@@ -52,7 +52,9 @@ fn main() {
         assert!(tx_result.is_err());
 
 
+        new_block.prev_hash = state.blocks[0].get_hash();
         new_block.nonce = new_block.mine();
+
         assert!(state.verify_all_blocks().is_ok());
 
         state.blocks.push(new_block);

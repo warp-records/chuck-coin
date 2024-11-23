@@ -47,7 +47,9 @@ pub enum BlockErr {
     Overspend(u64, u64),
     //erroneous start supply
     Supply(u64),
-    DoubleSpend,
+    FalseInput,
+    //given, expected
+    PrevHash(u64, u64),
 }
 
 impl State {
@@ -67,6 +69,7 @@ impl State {
         //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
+        let mut hasher = Sha3_256::new();
 
         let mut prev_block = block_iter.next().unwrap();
         let root_tx = prev_block.txs[0].clone();
@@ -89,14 +92,23 @@ impl State {
                     //check that all inputs being used exited previously
                     let Some(prev_out) = utxo_set.get(&input.prev_out) else {
                         //uh oh...
-                        return Err(BlockErr::DoubleSpend);
+                        return Err(BlockErr::FalseInput);
                     };
 
 
                     //outpoint must be outpoint of prev_out
+                    //make sure the owner authorized the transaction
                     if !Block::verify_sig(input.signature, &TxPredicate::Pubkey(prev_out.recipient), &input.prev_out) {
                         //nice try hackers
                         return Err(BlockErr::Sig(input.signature));
+                    }
+
+                    //check last block hash
+                    hasher.update(&prev_block.as_bytes_no_nonce());
+                    let prev_hash = prev_block.get_hash();
+
+                    if prev_hash != block.prev_hash {
+                        return Err(BlockErr::PrevHash(block.prev_hash, prev_hash));
                     }
 
                     //pretty sure we DON'T have to check
@@ -133,7 +145,7 @@ impl State {
 impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
-    pub const WORK_DIFFICULTY: u64 = u64::max_value()/1_000;
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 1_000;
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
@@ -160,7 +172,6 @@ impl Block {
     pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: &SigningKey, recipient_pub: &VerifyingKey, amount: u64) -> Result<&Tx, ()> {
         let spender_pub: PublicKey = VerifyingKey::from(spender_priv.clone()).into();
         let recipient_pub: PublicKey = VerifyingKey::from(recipient_pub.clone()).into();
-
 
         let mut new_tx = Tx::new();
 
@@ -242,14 +253,12 @@ impl Block {
     pub fn verify_work(&self) -> bool {
 
         let mut hasher = Sha3_256::new();
-        hasher.update(self.as_bytes_no_nonce());
+        let block_hash = self.get_hash();
 
-        let block_hash = hasher.finalize_reset();
-
-        hasher.update(block_hash);
+        hasher.update(block_hash.to_le_bytes());
         hasher.update(self.nonce.to_le_bytes());
         let work_hash = hasher.finalize();
-        let work_hash_64 = u64::from_be_bytes(work_hash[0..8].try_into().unwrap());
+        let work_hash_64 = u64::from_le_bytes(work_hash[0..8].try_into().unwrap());
 
         work_hash_64 <= Self::WORK_DIFFICULTY
     }
@@ -267,13 +276,12 @@ impl Block {
         let mut gold: u64 = rng.gen_range(0..Self::WORK_DIFFICULTY);
         let mut hasher = Sha3_256::new();
 
-        hasher.update(&self.as_bytes_no_nonce());
-        let block_hash = hasher.finalize_reset();
+        let block_hash = self.get_hash();
         loop {
-            hasher.update(block_hash);
+            hasher.update(block_hash.to_le_bytes());
             hasher.update(gold.to_le_bytes());
             let work_hash = hasher.finalize_reset();
-            let work_hash_64 = u64::from_be_bytes(work_hash[0..8].try_into().unwrap());
+            let work_hash_64 = u64::from_le_bytes(work_hash[0..8].try_into().unwrap());
 
             if work_hash_64 <= Self::WORK_DIFFICULTY {
                 return gold;
@@ -323,6 +331,14 @@ impl Block {
        //}
 
         bytes
+    }
+
+    pub fn get_hash(&self) -> u64 {
+        let mut hasher = Sha3_256::new();
+
+        hasher.update(&self.as_bytes_no_nonce());
+        let block_hash = hasher.finalize_reset();
+        u64::from_le_bytes(block_hash[0..8].try_into().unwrap())
     }
 }
 
