@@ -157,8 +157,10 @@ impl Block {
 
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
-    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: SigningKey, recipient_pub: PublicKey, amount: u64) -> Result<&Tx, ()> {
+    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: &SigningKey, recipient_pub: &VerifyingKey, amount: u64) -> Result<&Tx, ()> {
         let spender_pub: PublicKey = VerifyingKey::from(spender_priv.clone()).into();
+        let recipient_pub: PublicKey = VerifyingKey::from(recipient_pub.clone()).into();
+
 
         let mut new_tx = Tx::new();
 
@@ -224,7 +226,7 @@ impl Block {
         new_tx.signature = spender_priv.sign(&new_tx.txid);
 
         for input in new_tx.inputs.iter() {
-            utxo_set.remove(&input.prev_out);
+            utxo_set.remove(&input.prev_out).expect("Didn't find prev out");
         }
         //critical part
         for (i, output) in new_tx.outputs.iter().enumerate() {
