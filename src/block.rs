@@ -217,7 +217,7 @@ impl Block {
             let output = TxOutput {
                 spender: TxPredicate::Pubkey(spender_pub),
                 amount: spendable.last().unwrap().amount,
-                recipient: spender_pub,
+                recipient: recipient_pub,
             };
             new_tx.outputs.push(output);
         }
