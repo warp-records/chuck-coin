@@ -4,13 +4,14 @@ use k256::{
     ecdsa::{signature::Signer, Signature, SigningKey}, elliptic_curve::sec1::ToEncodedPoint, PublicKey, SecretKey
 };
 use sha3::*;
+use serde::*;
 use std::{hash::Hash, io::Read};
 
 //choose a better type later
 pub type Txid = [u8; 32];
 pub const EMPTY_TXID: Txid = [0; 32];
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TxOutput {
     //Use Predicate instead of just key to support
     //scripting in the future
@@ -24,10 +25,10 @@ pub struct TxOutput {
 //the second parameter u16 is just an index into the transaction outputs
 //TxOutputs are converted into Outpoints so the key doesn't have
 //to be stored
-#[derive(Hash, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct Outpoint(pub Txid, pub u16);
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TxInput {
     //point of the signature here
     //is so you can verify that the spender
@@ -40,7 +41,7 @@ pub struct TxInput {
 }
 
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Tx {
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
@@ -54,7 +55,7 @@ pub struct Tx {
 
 //let mut utxo_set: HashMap<Outpoint, Tx> = HashMap::new();
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum TxPredicate {
     Pubkey(PublicKey)
 }
@@ -153,6 +154,8 @@ impl Outpoint {
         bytes
     }
 }
+
+
 
 //thanks
 /*

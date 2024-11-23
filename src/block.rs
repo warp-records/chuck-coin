@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use serde::*;
 use std::fs;
 use rand::prelude::*;
 use bitvec::prelude::*;
@@ -20,14 +21,14 @@ type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 const BLANK_TXID: [u8; 32] = [0; 32];
 
-//#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
     pub utxo_set: HashMap<Outpoint, TxOutput>
 }
 
-//#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
