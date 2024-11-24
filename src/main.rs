@@ -10,8 +10,11 @@ use std::fs;
 use std::time::{Duration, Instant, SystemTime};
 use sha3::*;
 use k256::{
+    Secp256k1,
     ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
     SecretKey,
+    elliptic_curve::{ sec1::*, PublicKey},
+
 };
 use rand_core::OsRng;
 
@@ -29,28 +32,16 @@ fn main() {
         println!("Take a coin kiddo:\n");
         println!("{}", fs::read_to_string("asciiart.txt").unwrap());
 
-        let mut state = State::with_inital_block();
+        let mut state = State::with_genesis_block();
         let mut new_block = Block::new();
+        let (signing, verifying) = keys_from_str("e11ab7c3219a6b8c68913bf4d2081c6c72c6140b825fd4f0a08105e95801c696");
 
         //use my own key here
         let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+
         let me = User { signing, verifying };
         let user1 = User::random();
         let user2 = User::random();
-
-        let tx_result = new_block.transact(&mut state.utxo_set, &me.signing, &user1.verifying, 2_000_000);
-        assert!(tx_result.is_ok());
-        let tx_result = new_block.transact(&mut state.utxo_set, &me.signing, &user1.verifying, 69_000_000);
-        assert!(tx_result.is_err());
-
-        let tx_result = new_block.transact(&mut state.utxo_set, &user1.signing, &user2.verifying, 1_000_000);
-        assert!(tx_result.is_ok());
-
-        let tx_result = new_block.transact(&mut state.utxo_set, &user2.signing, &me.verifying, 1_000_000);
-        assert!(tx_result.is_ok());
-        let tx_result = new_block.transact(&mut state.utxo_set, &user2.signing, &me.verifying, 1_000_000);
-        assert!(tx_result.is_err());
-
 
         new_block.prev_hash = state.blocks[0].get_hash();
         new_block.nonce = new_block.mine();
@@ -65,6 +56,7 @@ fn main() {
 
         let serialized = fs::read("state.bin").expect("Errir reading file");
         let state: State = bincode::deserialize(&serialized).expect("Error deserializing");
+        let verify_result = state.verify_all_blocks();
         assert!(state.verify_all_blocks().is_ok());
         println!("Serialiaze and deserialize successful!!! :D");
 }
@@ -88,6 +80,11 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     //println!("Public key: {}", hex::encode_upper(verifying_key.to_sec1_bytes()));
 
     (signing_key, verifying_key)
+}
+
+pub fn pk_from_encoded_str(public_key: &str)-> PublicKey::<Secp256k1> {
+   let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
+   PublicKey::<Secp256k1>::from_encoded_point(&encoded_point).unwrap()
 }
 
 pub fn create_keypair() -> (SigningKey, VerifyingKey) {

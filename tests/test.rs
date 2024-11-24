@@ -48,7 +48,20 @@ mod tests {
     }
 
     fn single_transaction() -> (State, (SigningKey, VerifyingKey), (SigningKey, VerifyingKey)) {
-        let mut state = first_block();
+
+
+        let tx_result = new_block.transact(&mut state.utxo_set, &me.signing, &user1.verifying, 2_000_000);
+        assert!(tx_result.is_ok());
+        let tx_result = new_block.transact(&mut state.utxo_set, &me.signing, &user1.verifying, 69_000_000);
+        assert!(tx_result.is_err());
+
+        let tx_result = new_block.transact(&mut state.utxo_set, &user1.signing, &user2.verifying, 1_000_000);
+        assert!(tx_result.is_ok());
+
+        let tx_result = new_block.transact(&mut state.utxo_set, &user2.signing, &me.verifying, 1_000_000);
+        assert!(tx_result.is_ok());
+        let tx_result = new_block.transact(&mut state.utxo_set, &user2.signing, &me.verifying, 1_000_000);
+        assert!(tx_result.is_err());
 
         let (signing_key, verifying_key) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 

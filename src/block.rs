@@ -12,9 +12,10 @@ use ethnum::*;
 use serde::{Deserialize, Serialize};
 use sha3::*;
 use k256::{
+    Secp256k1,
     ecdsa::{SigningKey, signature::Verifier, VerifyingKey, Signature, signature::Signer},
     SecretKey,
-    PublicKey,
+    elliptic_curve::{ sec1::*, PublicKey},
 };
 
 type BlockHash = [u8; 32];
@@ -25,6 +26,7 @@ const BLANK_TXID: [u8; 32] = [0; 32];
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
+    #[serde(skip)]
     pub utxo_set: HashMap<Outpoint, TxOutput>
 }
 
@@ -33,7 +35,7 @@ pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
     pub version: u64,
-    pub prev_hash: u64,
+    pub prev_hash: BlockHash,
     pub nonce: u64,
     pub txs: Vec<Tx>,
 }
@@ -49,7 +51,8 @@ pub enum BlockErr {
     Supply(u64),
     FalseInput,
     //given, expected
-    PrevHash(u64, u64),
+    PrevHash(BlockHash, BlockHash),
+    GenesisBlock,
 }
 
 impl State {
@@ -64,7 +67,7 @@ impl State {
     //- sent and recieved by the keyholder of private_key.txt
     //- and a signature of an empty slice
     //- with an empty TXID
-    pub fn verify_all_blocks(&self) -> Result<(), BlockErr> {
+    pub fn verify_all_blocks(&self) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
         //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
@@ -72,9 +75,15 @@ impl State {
 
         let mut prev_block = block_iter.next().unwrap();
         let root_tx = prev_block.txs[0].clone();
-        if prev_block.txs.len() > 1 || root_tx.outputs.len() > 1 {
-            panic!("Expected a single root transaction with a single txo");
+        let my_verifying_key: VerifyingKey = pk_from_encoded_str("043E11520ECA9EC6E4934D64BA4F74C19547\
+            5AEE829F82DC3CE3CC6E549836286CC4262950D2918A2D4764AF20A7C6C5BD41827B5533066F4D8ED19CF609E8B1DF").into();
+
+        if prev_block.txs.len() > 1 || root_tx.outputs.len() > 1 ||
+            my_verifying_key.verify(&prev_block.txs[0].txid, &prev_block.txs[0].signature).is_err() {
+
+            return Err(BlockErr::GenesisBlock);
         }
+
 
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
@@ -83,8 +92,8 @@ impl State {
             let mut input_total: u64 = 0;
             let mut output_total: u64 = 0;
 
-            //verify hashes
             for tx in &block.txs {
+                //TODO: verify tx signature
                 let txid = tx.get_txid();
 
                 for (i, input) in tx.inputs.iter().enumerate() {
@@ -130,7 +139,7 @@ impl State {
             }
         }
 
-        Ok(())
+        Ok(utxo_set)
     }
 }
 
@@ -152,7 +161,7 @@ impl Block {
     pub fn new() -> Self {
         Self {
             version: 0,
-            prev_hash: 0,
+            prev_hash: BLANK_BLOCK_HASH,
             nonce: 0,
             txs: Vec::new(),
         }
@@ -169,8 +178,8 @@ impl Block {
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
     pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: &SigningKey, recipient_pub: &VerifyingKey, amount: u64) -> Result<&Tx, ()> {
-        let spender_pub: PublicKey = VerifyingKey::from(spender_priv.clone()).into();
-        let recipient_pub: PublicKey = VerifyingKey::from(recipient_pub.clone()).into();
+        let spender_pub = PublicKey::from(VerifyingKey::from(spender_priv.clone()));
+        let recipient_pub = PublicKey::from(VerifyingKey::from(recipient_pub.clone()));
 
         let mut new_tx = Tx::new();
 
@@ -254,7 +263,7 @@ impl Block {
         let mut hasher = Sha3_256::new();
         let block_hash = self.get_hash();
 
-        hasher.update(block_hash.to_le_bytes());
+        hasher.update(block_hash);
         hasher.update(self.nonce.to_le_bytes());
         let work_hash = hasher.finalize();
         let work_hash_64 = u64::from_le_bytes(work_hash[0..8].try_into().unwrap());
@@ -277,7 +286,7 @@ impl Block {
 
         let block_hash = self.get_hash();
         loop {
-            hasher.update(block_hash.to_le_bytes());
+            hasher.update(block_hash);
             hasher.update(gold.to_le_bytes());
             let work_hash = hasher.finalize_reset();
             let work_hash_64 = u64::from_le_bytes(work_hash[0..8].try_into().unwrap());
@@ -291,6 +300,47 @@ impl Block {
                 gold = 0;
             }
         }
+    }
+
+    pub fn genesis_block() -> Self {
+
+        let mut utxo_set = HashMap::new();
+        let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
+        let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
+        let verifying_key = VerifyingKey::from(signing_key.clone());
+
+        let mut block = Block {
+            version: 0,
+            prev_hash: BLANK_BLOCK_HASH,
+            nonce: 0,
+            txs: Vec::new(),
+        };
+
+        let public_key = PublicKey::from(verifying_key);
+
+        let root_output = TxOutput {
+            amount: Block::START_SUPPLY,
+            spender: TxPredicate::Pubkey(public_key),
+            //I'M RICH
+            recipient: public_key,
+        };
+
+        let mut root_tx = Tx {
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            txid: EMPTY_TXID,
+            signature: signing_key.sign(&[]),
+        };
+
+        root_tx.txid = root_tx.get_txid();
+        root_tx.signature = signing_key.sign(&root_tx.txid);
+        root_tx.outputs.push(root_output.clone());
+        println!("{}", hex::encode(root_tx.signature.to_bytes()));
+
+        utxo_set.insert(Outpoint(root_tx.txid, 0), root_output.clone());
+
+        block.txs.push(root_tx);
+        block
     }
 }
 //
@@ -316,7 +366,7 @@ impl Block {
     pub fn as_bytes_no_nonce(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         // Convert prev_hash to bytes
-        bytes.extend_from_slice(&self.prev_hash.to_be_bytes());
+        bytes.extend_from_slice(&self.prev_hash);
         //bytes.extend_from_slice(&self.nonce.to_be_bytes());
         // Convert txs to bytes
         for tx in &self.txs {
@@ -332,55 +382,29 @@ impl Block {
         bytes
     }
 
-    pub fn get_hash(&self) -> u64 {
+    pub fn get_hash(&self) -> BlockHash {
         let mut hasher = Sha3_256::new();
 
         hasher.update(&self.as_bytes_no_nonce());
         let block_hash = hasher.finalize_reset();
-        u64::from_le_bytes(block_hash[0..8].try_into().unwrap())
+        block_hash[0..32].try_into().unwrap()
     }
 }
 
 impl State {
-    pub fn with_inital_block() -> Self {
+    pub fn with_genesis_block() -> Self {
         let mut utxo_set = HashMap::new();
-        let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
-        let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
-        let verifying_key = VerifyingKey::from(signing_key.clone());
+        let block = Block::genesis_block();
+        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
 
-        let mut block = Block {
-            version: 0,
-            prev_hash: 0,
-            nonce: 0,
-            txs: Vec::new(),
-        };
-
-        let MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH = PublicKey::from(verifying_key);
-
-        let root_output = TxOutput {
-            amount: Block::START_SUPPLY,
-            spender: TxPredicate::Pubkey(MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH),
-            //I'M RICH
-            recipient: MYYY_SPEECIAAALLL_KEEEYYY_FUCKYEAH,
-        };
-
-        let mut root_tx = Tx {
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            txid: EMPTY_TXID,
-            signature: signing_key.sign(&[]),
-        };
-
-        root_tx.txid = root_tx.get_txid();
-        root_tx.signature = signing_key.sign(&root_tx.txid);
-        root_tx.outputs.push(root_output.clone());
-
-        utxo_set.insert(Outpoint(root_tx.txid, 0), root_output.clone());
-
-        block.txs.push(root_tx);
         Self {
             blocks: vec![block],
             utxo_set,
         }
     }
+}
+
+pub fn pk_from_encoded_str(public_key: &str)-> PublicKey::<Secp256k1> {
+   let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
+   PublicKey::<Secp256k1>::from_encoded_point(&encoded_point).unwrap()
 }
