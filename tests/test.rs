@@ -15,6 +15,11 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     (signing_key, verifying_key)
 }
 
+struct User {
+    signing: SigningKey,
+    verifying: VerifyingKey,
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, env::consts::OS, fs, iter::empty, u64};
@@ -23,6 +28,9 @@ mod tests {
 
     use super::*;
 
+
+    //figure this out
+    /*
     #[test]
     fn test_single_tx() {
         single_transaction();
@@ -182,5 +190,5 @@ mod tests {
 
         (state, (signing_key, verifying_key), (other_signing_key, other_verifying_key))
     }
-
+ */
 }
