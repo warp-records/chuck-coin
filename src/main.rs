@@ -34,12 +34,11 @@ fn main() {
 
         let mut state = State::with_genesis_block();
         let mut new_block = Block::new();
-        let (signing, verifying) = keys_from_str("e11ab7c3219a6b8c68913bf4d2081c6c72c6140b825fd4f0a08105e95801c696");
 
         //use my own key here
-        let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+        //let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
-        let me = User { signing, verifying };
+        let user0 = User::random();
         let user1 = User::random();
         let user2 = User::random();
 

@@ -75,15 +75,17 @@ impl State {
 
         let mut prev_block = block_iter.next().unwrap();
         let root_tx = prev_block.txs[0].clone();
-        let my_verifying_key: VerifyingKey = pk_from_encoded_str("043E11520ECA9EC6E4934D64BA4F74C19547\
-            5AEE829F82DC3CE3CC6E549836286CC4262950D2918A2D4764AF20A7C6C5BD41827B5533066F4D8ED19CF609E8B1DF").into();
+        let my_verifying_key: VerifyingKey = vk_from_encoded_str(
+            "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\
+            61ABE15BB1F1EC90871F5034A7B2BBF43F33C99225EF70C6F463B3\
+            93973C55E85382F90F2935E"
+        ).into();
 
         if prev_block.txs.len() > 1 || root_tx.outputs.len() > 1 ||
-            my_verifying_key.verify(&prev_block.txs[0].txid, &prev_block.txs[0].signature).is_err() {
+            !my_verifying_key.verify(&prev_block.txs[0].txid, &prev_block.txs[0].signature).is_ok() {
 
             return Err(BlockErr::GenesisBlock);
         }
-
 
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
@@ -140,6 +142,17 @@ impl State {
         }
 
         Ok(utxo_set)
+    }
+
+    pub fn with_genesis_block() -> State {
+        let mut utxo_set = HashMap::new();
+        let block = Block::genesis_block();
+        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
+
+        State {
+            blocks: vec![block],
+            utxo_set,
+        }
     }
 }
 
@@ -303,11 +316,8 @@ impl Block {
     }
 
     pub fn genesis_block() -> Self {
-
         let mut utxo_set = HashMap::new();
-        let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
-        let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
-        let verifying_key = VerifyingKey::from(signing_key.clone());
+        let my_verifying_key: VerifyingKey = vk_from_encoded_str("04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E8261ABE15BB1F1EC90871F5034A7B2BBF43F33C99225EF70C6F463B393973C55E85382F90F2935E").into();
 
         let mut block = Block {
             version: 0,
@@ -316,7 +326,7 @@ impl Block {
             txs: Vec::new(),
         };
 
-        let public_key = PublicKey::from(verifying_key);
+        let public_key = PublicKey::from(my_verifying_key);
 
         let root_output = TxOutput {
             amount: Block::START_SUPPLY,
@@ -325,17 +335,24 @@ impl Block {
             recipient: public_key,
         };
 
+        let my_signature = "fc839fd7d15231a66be4840c1fe916a8f3963367b69f099\
+            7c032839b5a1533da2859e00ab6e842a4bbce351ca435a281913c58638abe61\
+            5ff6887ed9a492b9a4";
+        let my_signature = Signature::from_slice(&(hex::decode(my_signature).unwrap())).unwrap();
+
         let mut root_tx = Tx {
             inputs: Vec::new(),
-            outputs: Vec::new(),
+            outputs: vec![root_output.clone()],
             txid: EMPTY_TXID,
-            signature: signing_key.sign(&[]),
+            signature: my_signature,
         };
-
         root_tx.txid = root_tx.get_txid();
-        root_tx.signature = signing_key.sign(&root_tx.txid);
-        root_tx.outputs.push(root_output.clone());
-        println!("{}", hex::encode(root_tx.signature.to_bytes()));
+
+        //let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
+        //let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
+        //let my_signature: Signature = signing_key.sign(&root_tx.txid);
+        //println!("{}", hex::encode(my_signature.to_bytes()));
+        //println!("{}", hex::encode(root_tx.signature.to_bytes()));
 
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_output.clone());
 
@@ -345,13 +362,6 @@ impl Block {
 }
 //
 
-/*
-impl State {
-    fn verify_blockchain() -> bool {
-
-    }
-}
- */
 impl Hash for Block {
     //DONT hash nonce
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -373,11 +383,6 @@ impl Block {
             bytes.extend(tx.as_bytes());
         }
         // Convert utxo_set to bytes
-        //this may not work
-        //for (outpoint, output) in &self.utxo_set {
-        //    bytes.extend(outpoint.as_bytes());
-        //    bytes.extend(output.as_bytes());
-       //}
 
         bytes
     }
@@ -391,20 +396,15 @@ impl Block {
     }
 }
 
-impl State {
-    pub fn with_genesis_block() -> Self {
-        let mut utxo_set = HashMap::new();
-        let block = Block::genesis_block();
-        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
 
-        Self {
-            blocks: vec![block],
-            utxo_set,
-        }
-    }
+pub fn vk_from_encoded_str(public_key: &str)-> VerifyingKey {
+   let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
+   VerifyingKey::from_encoded_point(&encoded_point).unwrap()
 }
 
-pub fn pk_from_encoded_str(public_key: &str)-> PublicKey::<Secp256k1> {
-   let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
-   PublicKey::<Secp256k1>::from_encoded_point(&encoded_point).unwrap()
+pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
+    let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
+    let verifying_key = VerifyingKey::from(signing_key.clone());
+
+    (signing_key, verifying_key)
 }
