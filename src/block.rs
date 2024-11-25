@@ -396,7 +396,6 @@ impl Block {
     }
 }
 
-
 pub fn vk_from_encoded_str(public_key: &str)-> VerifyingKey {
    let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
    VerifyingKey::from_encoded_point(&encoded_point).unwrap()

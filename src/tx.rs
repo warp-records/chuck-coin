@@ -130,7 +130,6 @@ impl Tx {
     }
 
     pub fn new() -> Self {
-        //let blank_sig =
         Self {
             inputs: Vec::new(),
             outputs: Vec::new(),

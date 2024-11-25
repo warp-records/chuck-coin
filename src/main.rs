@@ -38,6 +38,7 @@ fn main() {
         //use my own key here
         //let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
+        //there was a test here before
         let user0 = User::random();
         let user1 = User::random();
         let user2 = User::random();
