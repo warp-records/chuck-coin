@@ -36,12 +36,12 @@ fn main() {
         let mut new_block = Block::new();
 
         //use my own key here
-        //let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+        let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
         //there was a test here before
-        let user0 = User::random();
-        let user1 = User::random();
-        let user2 = User::random();
+        let (_, user0_verifying) = keys_from_str("34031D90514FC80D22F7A5361E6D443536F3D46393F9F1E9473911A88740D37E");
+
+        new_block.transact(&mut state.utxo_set, &signing, &user0_verifying, 2).unwrap();
 
         new_block.prev_hash = state.blocks[0].get_hash();
         new_block.nonce = new_block.mine();
@@ -57,7 +57,7 @@ fn main() {
         let serialized = fs::read("state.bin").expect("Errir reading file");
         let state: State = bincode::deserialize(&serialized).expect("Error deserializing");
         let verify_result = state.verify_all_blocks();
-        assert!(state.verify_all_blocks().is_ok());
+        assert!(verify_result.is_ok());
         println!("Serialiaze and deserialize successful!!! :D");
 }
 
@@ -77,7 +77,7 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let verifying_key = VerifyingKey::from(signing_key.clone());
 
     //println!("Private key: {} ", hex::encode_upper(signing_key.to_bytes()));
-    //println!("Public key: {}", hex::encode_upper(verifying_key.to_sec1_bytes()));
+    //println!("Public key: {}", hex::encode_upper(verifying_key.to_encoded_point(false)));
 
     (signing_key, verifying_key)
 }

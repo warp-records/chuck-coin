@@ -16,7 +16,7 @@ pub struct TxOutput {
     //Use Predicate instead of just key to support
     //scripting in the future
     pub spender: TxPredicate,
-    //amount is one one millionth of a coin (1 / 10^6)
+    //amount is one millionth of a coin (1 / 10^6)
     pub amount: u64,
     pub recipient: PublicKey,
 }
