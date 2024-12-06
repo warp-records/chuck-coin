@@ -20,7 +20,6 @@ use k256::{
 
 type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
-const BLANK_TXID: [u8; 32] = [0; 32];
 
 #[derive(Serialize, Deserialize)]
 //will prune blocks later
@@ -73,7 +72,7 @@ impl State {
         let mut block_iter = self.blocks.iter();
         let mut hasher = Sha3_256::new();
 
-        let mut prev_block = block_iter.next().unwrap();
+        let prev_block = block_iter.next().unwrap();
         let root_tx = prev_block.txs[0].clone();
         let my_verifying_key: VerifyingKey = vk_from_encoded_str(
             "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\
@@ -96,9 +95,8 @@ impl State {
 
             for tx in &block.txs {
                 //TODO: verify tx signature
-                let txid = tx.get_txid();
 
-                for (i, input) in tx.inputs.iter().enumerate() {
+                for input in tx.inputs.iter() {
                     //check that all inputs being used exited previously
                     let Some(prev_out) = utxo_set.get(&input.prev_out) else {
                         //uh oh...
