@@ -58,6 +58,7 @@ impl State {
     //TODO:
     //verify supply
 
+
     //creates a State with a single block which:
     //- has one block
     //- with one transaction
@@ -70,9 +71,8 @@ impl State {
         //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
-        let mut hasher = Sha3_256::new();
 
-        let prev_block = block_iter.next().unwrap();
+        let mut prev_block = block_iter.next().unwrap();
         let root_tx = prev_block.txs[0].clone();
         let my_verifying_key: VerifyingKey = vk_from_encoded_str(
             "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\
@@ -89,6 +89,30 @@ impl State {
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
         while let Some(block) = block_iter.next() {
+            utxo_set = self.verify_block(&utxo_set, prev_block, block)?;
+            prev_block = block;
+        }
+
+        Ok(utxo_set)
+    }
+
+    pub fn with_genesis_block() -> State {
+        let mut utxo_set = HashMap::new();
+        let block = Block::genesis_block();
+        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
+
+        State {
+            blocks: vec![block],
+            utxo_set,
+        }
+    }
+
+    //TODO: verify individual blocks
+    //can't do this!!!
+    //type UtxoSet = HashMap<Outpoint, TxOutput>;
+    pub fn verify_block(&self, utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
+            let mut hasher = Sha3_256::new();
+            let mut utxo_set = utxo_set.clone();
             //keep track of balances
             let mut input_total: u64 = 0;
             let mut output_total: u64 = 0;
@@ -137,21 +161,10 @@ impl State {
             if !block.verify_work() {
                 return Err(BlockErr::Nonce(block.nonce));
             }
+
+            Ok(utxo_set)
         }
 
-        Ok(utxo_set)
-    }
-
-    pub fn with_genesis_block() -> State {
-        let mut utxo_set = HashMap::new();
-        let block = Block::genesis_block();
-        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
-
-        State {
-            blocks: vec![block],
-            utxo_set,
-        }
-    }
 }
 
 //lol XD
