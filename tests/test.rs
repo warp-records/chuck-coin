@@ -15,10 +15,6 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     (signing_key, verifying_key)
 }
 
-struct User {
-    signing: SigningKey,
-    verifying: VerifyingKey,
-}
 
 #[cfg(test)]
 mod tests {

@@ -11,7 +11,7 @@ use std::{hash::Hash, io::Read};
 pub type Txid = [u8; 32];
 pub const EMPTY_TXID: Txid = [0; 32];
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct TxOutput {
     //Use Predicate instead of just key to support
     //scripting in the future
@@ -28,7 +28,7 @@ pub struct TxOutput {
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct Outpoint(pub Txid, pub u16);
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct TxInput {
     //point of the signature here
     //is so you can verify that the spender
@@ -41,7 +41,7 @@ pub struct TxInput {
 }
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Tx {
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
@@ -55,7 +55,7 @@ pub struct Tx {
 
 //let mut utxo_set: HashMap<Outpoint, Tx> = HashMap::new();
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum TxPredicate {
     Pubkey(PublicKey)
 }
