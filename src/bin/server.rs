@@ -1,5 +1,8 @@
 
+use futures::SinkExt;
+use std::hash::Hash;
 use std::io::Read;
+use std::collections::HashSet;
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use std::sync::{Arc, Mutex};
 use serde::*;
@@ -31,6 +34,7 @@ enum ClientFrame {
     Mined(Block),
     GetBlockchain,
     GetLastBlock,
+    GetNewTxpool,
     GetVersion,
 }
 
@@ -54,8 +58,11 @@ async fn main() {
     let state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     assert!(state.verify_all_blocks().is_ok());
 
+    //wish there was an arcmutex macro or something
+
     let state = Arc::new(Mutex::new(state));
-    let new_txs = Arc::new(Mutex::new(Vec::<Tx>::new()));
+    //need hashmap since we're
+    let new_txs = Arc::new(Mutex::new(HashSet::<Tx>::new()));
 
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
@@ -71,19 +78,34 @@ async fn main() {
             while let Some(Ok(frame)) = framed_stream.next().await {
                 match frame {
                     TxFrame(tx) => {
+                        println!("New tx received");
                         let mut new_txs = new_txs.lock().unwrap();
-                        new_txs.push(tx);
+                        new_txs.insert(tx);
                     },
                     Mined(block) => {
                         let mut state = state.lock().unwrap();
-                        if let Ok(utxo_set) = state.verify_block(&state.utxo_set,
-                            state.blocks.last().unwrap(), &block) {
-                            state.utxo_set = utxo_set;
-                            println!("New block accepted");
+                        let block_clone = block.clone();
+                        if state.add_block_if_valid(block).is_ok() {
+                                println!("New block accepted");
+                                let mut new_txs = new_txs.lock().unwrap();
+                                new_txs.retain(|item| !block_clone.txs.iter().any(|x| x == item));
                         } else {
                             println!("New block rejected");
                         }
                     },
+                    GetNewTxpool => {
+                        println!("Tx pool requested");
+                        let new_txs = {
+                            let new_txs = new_txs.lock().unwrap();
+                            new_txs.iter().cloned().collect::<Vec<_>>()
+                        };
+                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await;
+                    },
+                    GetVersion => {
+                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await;
+                    },
+
+                    //do later
                     _ => {
                         unimplemented!();
                     }
@@ -115,21 +137,16 @@ impl Decoder for CoinCodec {
     }
 }
 
-/*impl Encoder<ServerFrame> for CoinCodec {
-    type Item = ClientFrame;
+impl Encoder<ServerFrame> for CoinCodec {
     type Error = io::Error;
 
-    fn encode(&mut self, src: &mut BytesMut) ->
-        Result<Option<Self::Item>, Self::Error> {
+    fn encode(&mut self, item: ServerFrame, dst: &mut BytesMut) ->
+        Result<(), Self::Error> {
 
-        if src.is_empty() {
-            return Ok(None)
-        };
+            let bytes = bincode::serialize(&item)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        match bincode::deserialize(src.as_ref()) {
-            Ok(frame) => frame,
-            Err(_) => Self::Error()
+            dst.extend_from_slice(&bytes);
+            Ok(())
         }
-    }
 }
-*/

@@ -6,6 +6,7 @@ use rand::prelude::*;
 use bitvec::prelude::*;
 use std::hash::Hash;
 use crate::tx::*;
+use crate::user::*;
 use std::collections::HashMap;
 use ethnum::*;
 //use ethnum::U256::trailing_zeros;
@@ -29,7 +30,7 @@ pub struct State {
     pub utxo_set: HashMap<Outpoint, TxOutput>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
     //apparently the utxoset isn't supposed to belong
     //to a particular block, look into this
@@ -39,6 +40,7 @@ pub struct Block {
     pub txs: Vec<Tx>,
 }
 
+#[derive(Debug)]
 pub enum BlockErr {
     //erroneous nonce
     Nonce(u64),
@@ -165,6 +167,13 @@ impl State {
             Ok(utxo_set)
         }
 
+        pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
+            let new_utxo_set = self.verify_block(&self.utxo_set, self.blocks.last().unwrap(), &block)?;
+            self.utxo_set = new_utxo_set;
+            self.blocks.push(block);
+
+            Ok(())
+        }
 }
 
 //lol XD
@@ -405,16 +414,4 @@ impl Block {
         let block_hash = hasher.finalize_reset();
         block_hash[0..32].try_into().unwrap()
     }
-}
-
-pub fn vk_from_encoded_str(public_key: &str)-> VerifyingKey {
-   let encoded_point = EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).unwrap();
-   VerifyingKey::from_encoded_point(&encoded_point).unwrap()
-}
-
-pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
-    let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
-    let verifying_key = VerifyingKey::from(signing_key.clone());
-
-    (signing_key, verifying_key)
 }
