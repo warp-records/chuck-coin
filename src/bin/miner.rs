@@ -2,22 +2,14 @@
 use k256::ecdsa::Signature;
 use k256::{SecretKey, PublicKey};
 use bincode::deserialize;
-use futures::SinkExt;
-use std::hash::Hash;
-use std::io::Read;
+use futures::{SinkExt, StreamExt};
 use std::collections::HashSet;
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use std::sync::{Arc, Mutex};
-use serde::*;
-use tokio_util::codec::{Decoder, Encoder, Framed};
-use futures::StreamExt;
-use bytes::{BytesMut, Buf, BufMut};
-use std::io;
+use tokio_util::codec::{Framed};
 use coin::block::*;
-use coin::tx::*;
 use coin::user::*;
-use ClientFrame::*;
-use ServerFrame::*;
+use coin::frametype::*;
 
 use std::fs;
 use serde::*;
@@ -25,55 +17,11 @@ use tokio::{
     net::{TcpListener, TcpStream}
 };
 
-
-#[derive(Serialize, Deserialize)]
-enum ClientFrame {
-    TxFrame(Tx),
-    Mined(Block),
-    GetBlockchain,
-    GetLastBlock,
-    GetNewTxpool,
-    GetVersion,
-}
-
-#[derive(Serialize, Deserialize)]
-enum ServerFrame {
-    NewBlockMined,
-    Version(String),
-    NewTxPool(Vec<Tx>),
-}
-
-struct CoinCodec;
-
-impl Decoder for CoinCodec {
-    type Item = ServerFrame;
-    type Error = io::Error;
-
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.is_empty() { return Ok(None) }
-
-        bincode::deserialize(&src[..])
-            .map(|frame| { src.clear(); Some(frame) })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-    }
-}
-
-impl Encoder<ClientFrame> for CoinCodec {
-    type Error = io::Error;
-
-    fn encode(&mut self, item: ClientFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let bytes = bincode::serialize(&item)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        dst.extend_from_slice(&bytes);
-        Ok(())
-    }
-}
-
 #[tokio::main]
 async fn main() {
     // Connect to the server
     let stream = TcpStream::connect("127.0.0.1:6379").await.unwrap();
-    let mut framed = Framed::new(stream, CoinCodec);
+    let mut framed = Framed::new(stream, MinerCodec);
 
     // Get version
     framed.send(ClientFrame::GetVersion).await.unwrap();
@@ -94,10 +42,17 @@ async fn main() {
     let user0 = User::random();
 
     new_block.transact(&mut state.utxo_set, &signing, &user0.verifying, 2).unwrap();
+    new_block.prev_hash = state.blocks.last().unwrap().get_hash();
+    new_block.nonce = new_block.mine();
+    state.blocks.push(new_block);
 
-    framed.send(ClientFrame::TxFrame(new_block.txs[0].clone())).await;
+    assert!(state.verify_all_blocks().is_ok());
+
+    //framed.send(ClientFrame::TxFrame(new_block.txs[0].clone())).await.unwrap();
+    framed.send(ClientFrame::Mined(state.blocks.last().unwrap().clone())).await;
 
 
+    /*
     // Mining loop
     loop {
         // Get tx pool
@@ -122,5 +77,5 @@ async fn main() {
             // Submit mined block
             framed.send(ClientFrame::Mined(block)).await.unwrap();
         }
-    }
+    } */
 }

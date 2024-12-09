@@ -38,15 +38,15 @@ fn main() {
 
         //there was a test here before
         let (_, user0_verifying) = keys_from_str("34031D90514FC80D22F7A5361E6D443536F3D46393F9F1E9473911A88740D37E");
+        let user1 = User::random();
 
         new_block.transact(&mut state.utxo_set, &signing, &user0_verifying, 2).unwrap();
 
         new_block.prev_hash = state.blocks[0].get_hash();
         new_block.nonce = new_block.mine();
 
-        assert!(state.verify_all_blocks().is_ok());
-
         state.blocks.push(new_block);
+        assert!(state.verify_all_blocks().is_ok());
 
         let serialized = bincode::serialize(&state).expect("Error serializing");
         fs::write("state.bin", serialized).expect("Error writing to file");

@@ -1,22 +1,17 @@
 
-use futures::SinkExt;
-use std::hash::Hash;
-use std::io::Read;
 use std::collections::HashSet;
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use std::sync::{Arc, Mutex};
-use serde::*;
-use tokio_util::codec::{Decoder, Encoder, Framed};
-use futures::StreamExt;
-use bytes::{BytesMut, Buf, BufMut};
-use std::io;
+use tokio_util::codec::{Framed};
+use futures::{StreamExt, SinkExt};
 use coin::block::*;
 use coin::tx::*;
+use coin::frametype::*;
 use ClientFrame::*;
 use ServerFrame::*;
 
+
 use std::fs;
-use serde::*;
 use tokio::{
     net::{TcpListener, TcpStream}
 };
@@ -26,36 +21,12 @@ use tokio::{
 //    Miner,
 //}
 
-//sent from client
-#[derive(Serialize, Deserialize)]
-enum ClientFrame {
-    //ConnectionType,
-    TxFrame(Tx),
-    Mined(Block),
-    GetBlockchain,
-    GetLastBlock,
-    GetNewTxpool,
-    GetVersion,
-}
-
-#[derive(Serialize, Deserialize)]
-//sent from server
-enum ServerFrame {
-    //idk if we'll need these two
-    NewBlockMined,
-    //Read this from cargotoml
-    Version(String),
-    //Client gets to decide which txs to mine
-    NewTxPool(Vec<Tx>),
-}
-
-struct CoinCodec;
-
 #[tokio::main]
 async fn main() {
     println!("Starting server");
     let serialized = fs::read("state.bin").expect("Error reading file");
-    let state: State = bincode::deserialize(&serialized).expect("Error deserializing");
+    let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
+    state.utxo_set = state.verify_all_blocks().unwrap();
     assert!(state.verify_all_blocks().is_ok());
 
     //wish there was an arcmutex macro or something
@@ -70,7 +41,7 @@ async fn main() {
         let (socket, addr) = listener.accept().await.unwrap();
         println!("New connection from: {}", addr);
 
-        let mut framed_stream = Framed::new(socket, CoinCodec);
+        let mut framed_stream = Framed::new(socket, ServerCodec);
         let new_txs = new_txs.clone();
         let state = state.clone();
         tokio::spawn(async move {
@@ -116,37 +87,4 @@ async fn main() {
         //match
 
     }
-}
-
-
-impl Decoder for CoinCodec {
-    type Item = ClientFrame;
-    type Error = io::Error;
-
-    fn decode(&mut self, src: &mut BytesMut) ->
-        Result<Option<Self::Item>, Self::Error> {
-
-        if src.is_empty() {
-            return Ok(None)
-        };
-
-        match bincode::deserialize(&src[..]) {
-            Ok(frame) => Ok(Some(frame)),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
-    }
-}
-
-impl Encoder<ServerFrame> for CoinCodec {
-    type Error = io::Error;
-
-    fn encode(&mut self, item: ServerFrame, dst: &mut BytesMut) ->
-        Result<(), Self::Error> {
-
-            let bytes = bincode::serialize(&item)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            dst.extend_from_slice(&bytes);
-            Ok(())
-        }
 }
