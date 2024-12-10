@@ -12,10 +12,10 @@ use futures::{SinkExt, StreamExt};
 #[derive(Serialize, Deserialize)]
 pub enum ClientFrame {
     //ConnectionType,
-    TxFrame(Tx),
+    TxFrame(Vec<Tx>),
     Mined(Block),
     GetBlockchain,
-    GetLastBlock,
+    GetLastHash,
     GetNewTxpool,
     GetVersion,
 }
@@ -29,7 +29,11 @@ pub enum ServerFrame {
     Version(String),
     //Client gets to decide which txs to mine
     NewTxPool(Vec<Tx>),
+    LastBlockHash(BlockHash),
 }
+
+pub const PORT: u16 = 1337;
+pub const SERVER_IP: &str = "127.0.0.1";
 
 //consider merging or using a macro
 pub struct MinerCodec;

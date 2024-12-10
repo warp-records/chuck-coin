@@ -20,7 +20,7 @@ use tokio::{
 #[tokio::main]
 async fn main() {
     // Connect to the server
-    let stream = TcpStream::connect("127.0.0.1:6379").await.unwrap();
+    let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}")).await.unwrap();
     let mut framed = Framed::new(stream, MinerCodec);
 
     // Get version
@@ -33,28 +33,43 @@ async fn main() {
     let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     state.utxo_set = state.verify_all_blocks().unwrap();
 
+    let mut new_txs = Vec::new();
+    framed.send(ClientFrame::GetNewTxpool).await;
+    while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
+        if !txs.is_empty() {
+            new_txs = txs;
+            break;
+        } else {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            framed.send(ClientFrame::GetNewTxpool).await;
+        }
+    }
+
+    framed.send(ClientFrame::GetLastHash).await;
+    //shouldn't need this but lets see if it works with it first
+
+    println!("Got prev block hash");
+    let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {
+        println!("Server hash: {:?}", hash);
+        hash
+    } else {
+        panic!();
+    };
+    println!("Local hash: {:?}", state.blocks.last().unwrap().get_hash());
+
     let mut new_block = Block::new();
-
-    //use my own key here
-    let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
-
-    //there was a test here before
-    let user0 = User::random();
-
-    new_block.transact(&mut state.utxo_set, &signing, &user0.verifying, 2).unwrap();
-    new_block.prev_hash = state.blocks.last().unwrap().get_hash();
+    new_block.txs = new_txs;
+    new_block.prev_hash = prev_hash;
     new_block.nonce = new_block.mine();
-    state.blocks.push(new_block);
+    assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 
-    assert!(state.verify_all_blocks().is_ok());
+    println!("sending");
+    framed.send(ClientFrame::Mined(new_block)).await.unwrap();
+}
 
-    //framed.send(ClientFrame::TxFrame(new_block.txs[0].clone())).await.unwrap();
-    framed.send(ClientFrame::Mined(state.blocks.last().unwrap().clone())).await;
-
-
-    /*
-    // Mining loop
-    loop {
+/*
+// Mining loop
+loop {
         // Get tx pool
         framed.send(ClientFrame::GetNewTxpool).await.unwrap();
 
@@ -78,4 +93,3 @@ async fn main() {
             framed.send(ClientFrame::Mined(block)).await.unwrap();
         }
     } */
-}

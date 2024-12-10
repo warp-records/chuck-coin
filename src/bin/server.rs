@@ -35,7 +35,7 @@ async fn main() {
     //need hashmap since we're
     let new_txs = Arc::new(Mutex::new(HashSet::<Tx>::new()));
 
-    let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
+    let listener = TcpListener::bind(format!("0.0.0.0:{PORT}")).await.unwrap();
 
     loop {
         let (socket, addr) = listener.accept().await.unwrap();
@@ -48,10 +48,10 @@ async fn main() {
 
             while let Some(Ok(frame)) = framed_stream.next().await {
                 match frame {
-                    TxFrame(tx) => {
-                        println!("New tx received");
+                    TxFrame(txs) => {
+                        println!("New txs received");
                         let mut new_txs = new_txs.lock().unwrap();
-                        new_txs.insert(tx);
+                        new_txs.extend(txs);
                     },
                     Mined(block) => {
                         let mut state = state.lock().unwrap();
@@ -70,11 +70,20 @@ async fn main() {
                             let new_txs = new_txs.lock().unwrap();
                             new_txs.iter().cloned().collect::<Vec<_>>()
                         };
-                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await;
+                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await.unwrap();
                     },
                     GetVersion => {
-                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await;
+                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await.unwrap();
                     },
+                    GetLastHash => {
+                        let last_hash = {
+                            //change this later
+                            let blocks = state.lock().unwrap().blocks.clone();
+                            blocks.last().unwrap().get_hash()
+                        };
+
+                        framed_stream.send(ServerFrame::LastBlockHash(last_hash)).await.unwrap();
+                    }
 
                     //do later
                     _ => {

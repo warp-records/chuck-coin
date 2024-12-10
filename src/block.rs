@@ -19,7 +19,7 @@ use k256::{
     elliptic_curve::{ sec1::*, PublicKey},
 };
 
-type BlockHash = [u8; 32];
+pub type BlockHash = [u8; 32];
 const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 
 #[derive(Serialize, Deserialize)]
@@ -27,7 +27,11 @@ const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 pub struct State {
     pub blocks: Vec<Block>,
     #[serde(skip)]
-    pub utxo_set: HashMap<Outpoint, TxOutput>
+    //need to keep an old copy so that we can make
+    //transactions while having an old copy for
+    //verify_block to use
+    pub old_utxo_set: HashMap<Outpoint, TxOutput>,
+    pub utxo_set: HashMap<Outpoint, TxOutput>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -105,6 +109,7 @@ impl State {
 
         State {
             blocks: vec![block],
+            old_utxo_set: utxo_set.clone(),
             utxo_set,
         }
     }
@@ -112,9 +117,9 @@ impl State {
     //TODO: verify individual blocks
     //can't do this!!!
     //type UtxoSet = HashMap<Outpoint, TxOutput>;
-    pub fn verify_block(&self, utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
+    pub fn verify_block(&self, old_utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
             let mut hasher = Sha3_256::new();
-            let mut utxo_set = utxo_set.clone();
+            let mut utxo_set = old_utxo_set.clone();
             //keep track of balances
             let mut input_total: u64 = 0;
             let mut output_total: u64 = 0;
@@ -168,7 +173,7 @@ impl State {
         }
 
         pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
-            let new_utxo_set = self.verify_block(&self.utxo_set, self.blocks.last().unwrap(), &block)?;
+            let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block)?;
             self.utxo_set = new_utxo_set;
             self.blocks.push(block);
 
