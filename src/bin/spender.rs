@@ -35,7 +35,7 @@ async fn main() {
     state.old_utxo_set = state.utxo_set.clone();
 
     //use my own key here
-    for _ in 0..10 {
+    //for _ in 0..10 {
         let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
         let mut new_block = Block::new();
@@ -53,5 +53,5 @@ async fn main() {
         framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await;
         println!("Submitting 10 test transactions");
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    }
+        //}
 }

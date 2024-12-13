@@ -63,8 +63,6 @@ async fn main() {
         new_block.nonce = new_block.mine();
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 
-        //assert!(state.verify_block(&state.old_utxo_set, &state.blocks.last().unwrap(), &new_block).is_ok());
-
         println!("sending");
         framed.send(ClientFrame::Mined(new_block)).await.unwrap();
     }

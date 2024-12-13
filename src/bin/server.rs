@@ -49,7 +49,7 @@ async fn main() {
             while let Some(Ok(frame)) = framed_stream.next().await {
                 match frame {
                     TxFrame(txs) => {
-                        //println!("New txs received");
+                        println!("New txs received");
                         //todo: verify that txs are valid
                         let mut new_txs = new_txs.lock().unwrap();
                         new_txs.extend(txs);
@@ -67,7 +67,7 @@ async fn main() {
                         }
                     },
                     GetNewTxpool => {
-                        //println!("Tx pool requested");
+                        println!("Tx pool requested");
                         let new_txs = { new_txs.lock().unwrap().clone() };
                         framed_stream.send(ServerFrame::NewTxPool(new_txs)).await.unwrap();
                     },
