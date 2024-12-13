@@ -1,12 +1,5 @@
 
-use coin;
-use coin::block::*;
-use coin::tx::*;
-use rand_core::OsRng;
-use k256::{
-    ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey},
-    SecretKey,
-};
+use k256::ecdsa::{SigningKey, VerifyingKey};
 
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();
@@ -18,11 +11,11 @@ pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, env::consts::OS, fs, iter::empty, u64};
+    
 
-    use k256::PublicKey;
+    
 
-    use super::*;
+    
 
 
     //figure this out

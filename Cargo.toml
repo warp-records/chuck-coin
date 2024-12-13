@@ -1,6 +1,6 @@
 [package]
 name = "coin"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license-file = "license.md"
 description = "Simple Chuck E Cheese themed crypto currency"
@@ -13,10 +13,10 @@ ethnum = "1.5.0"
 futures = "0.3.31"
 hex = "0.4.3"
 hex-literal = "0.4.1"
+# indexmap = "2.7.0"
 k256 = { version = "0.13.4", features = ["serde"] }
 rand = "0.8.5"
 rand_core = "0.6.4"
-random = "0.14.0"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.133"
 sha3 = "0.10.8"

@@ -30,13 +30,14 @@ fn main() {
         println!("Take a coin kiddo:\n");
         println!("{}", fs::read_to_string("asciiart.txt").unwrap());
 
-        let mut state = State::with_genesis_block();
-        let mut new_block = Block::new();
+        let state = State::with_genesis_block();
+        let new_block = Block::new();
 
         //use my own key here
         let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
         //there was a test here before
+        /*
         let (_, user0_verifying) = keys_from_str("34031D90514FC80D22F7A5361E6D443536F3D46393F9F1E9473911A88740D37E");
         let user1 = User::random();
 
@@ -47,6 +48,7 @@ fn main() {
 
         state.blocks.push(new_block);
         assert!(state.verify_all_blocks().is_ok());
+        */
 
         let serialized = bincode::serialize(&state).expect("Error serializing");
         fs::write("state.bin", serialized).expect("Error writing to file");

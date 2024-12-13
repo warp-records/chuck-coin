@@ -1,13 +1,12 @@
 
 
-
 use k256::{
     Secp256k1,
-    ecdsa::{SigningKey, signature::Verifier, VerifyingKey, Signature, signature::Signer},
-    SecretKey,
+    ecdsa::{SigningKey, VerifyingKey},
     elliptic_curve::{ sec1::*, PublicKey},
 };
 
+//for debugging purposes
 pub struct User {
     pub signing: SigningKey,
     pub verifying: VerifyingKey,
@@ -23,7 +22,16 @@ impl User {
         let verifying_key = VerifyingKey::from(signing_key.clone());
         Self { signing: signing_key, verifying: verifying_key }
     }
+
+    pub fn from_priv(priv_key: &str) -> User {
+        let keypair = keys_from_str(priv_key);
+        User {
+            signing: keypair.0,
+            verifying: keypair.1,
+        }
+    }
 }
+
 
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let signing_key = SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();

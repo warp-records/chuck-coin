@@ -9,7 +9,6 @@ use crate::tx::*;
 use crate::user::*;
 use std::collections::HashMap;
 use ethnum::*;
-//use ethnum::U256::trailing_zeros;
 use serde::{Deserialize, Serialize};
 use sha3::*;
 use k256::{
@@ -26,11 +25,12 @@ const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
-    #[serde(skip)]
     //need to keep an old copy so that we can make
     //transactions while having an old copy for
     //verify_block to use
+    #[serde(skip)]
     pub old_utxo_set: HashMap<Outpoint, TxOutput>,
+    #[serde(skip)]
     pub utxo_set: HashMap<Outpoint, TxOutput>,
 }
 
@@ -60,10 +60,10 @@ pub enum BlockErr {
     GenesisBlock,
 }
 
+//should probably rework this interface for clarity
 impl State {
     //TODO:
     //verify supply
-
 
     //creates a State with a single block which:
     //- has one block
@@ -74,7 +74,6 @@ impl State {
     //- and a signature of an empty slice
     //- with an empty TXID
     pub fn verify_all_blocks(&self) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
-        //let mut utxo_set = HashMap::<Outpoint, TxOutput>::new();
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
 
@@ -114,8 +113,7 @@ impl State {
         }
     }
 
-    //TODO: verify individual blocks
-    //can't do this!!!
+    //can't use this syntax for some reason
     //type UtxoSet = HashMap<Outpoint, TxOutput>;
     pub fn verify_block(&self, old_utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
             let mut hasher = Sha3_256::new();
@@ -150,14 +148,20 @@ impl State {
                         return Err(BlockErr::PrevHash(block.prev_hash, prev_hash));
                     }
 
+
                     //pretty sure we DON'T have to check
                     //the amount from each individual spender
                     input_total += prev_out.amount;
+                    //whoops, forgot to add this lol
                 }
 
                 for (i, output) in tx.outputs.iter().enumerate() {
                     output_total += output.amount;
                     utxo_set.insert(Outpoint(tx.txid, i as u16), output.clone());
+                }
+
+                for input in tx.inputs.iter() {
+                    utxo_set.remove(&input.prev_out);
                 }
 
                 if output_total > input_total {
@@ -174,7 +178,8 @@ impl State {
 
         pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
             let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block)?;
-            self.utxo_set = new_utxo_set;
+            self.utxo_set = new_utxo_set.clone();
+            self.old_utxo_set = new_utxo_set;
             self.blocks.push(block);
 
             Ok(())
@@ -309,12 +314,6 @@ impl Block {
         work_hash_64 <= Self::WORK_DIFFICULTY
     }
 
-    //pub fn block_work(hash: BLOCK_HASH) -> u64 {
-   //     const MAX_NONCE: u64 = u64::MAX;
-   //     let hash_64 = u64::from_be_bytes(hash[0..8].try_into().unwrap());
-   //     MAX_NONCE - hash_64
-   // }
-
     pub fn mine(&self) -> u64 {
         let mut rng = rand::thread_rng();
         //start at a random spot so not all
@@ -372,12 +371,6 @@ impl Block {
             signature: my_signature,
         };
         root_tx.txid = root_tx.get_txid();
-
-        //let priv_key_str = fs::read_to_string("private_key.txt").expect("Expected private Secp256k1 key in file \"private_key.txt\"");
-        //let signing_key = SigningKey::from_bytes(hex::decode(priv_key_str).unwrap().as_slice().into()).unwrap();
-        //let my_signature: Signature = signing_key.sign(&root_tx.txid);
-        //println!("{}", hex::encode(my_signature.to_bytes()));
-        //println!("{}", hex::encode(root_tx.signature.to_bytes()));
 
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_output.clone());
 

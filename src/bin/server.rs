@@ -1,5 +1,4 @@
 
-use std::collections::HashSet;
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use std::sync::{Arc, Mutex};
 use tokio_util::codec::{Framed};
@@ -8,13 +7,10 @@ use coin::block::*;
 use coin::tx::*;
 use coin::frametype::*;
 use ClientFrame::*;
-use ServerFrame::*;
 
 
 use std::fs;
-use tokio::{
-    net::{TcpListener, TcpStream}
-};
+use tokio::net::TcpListener;
 
 //enum ConnectionType {
 //    Spender,
@@ -27,13 +23,17 @@ async fn main() {
     let serialized = fs::read("state.bin").expect("Error reading file");
     let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     state.utxo_set = state.verify_all_blocks().unwrap();
-    assert!(state.verify_all_blocks().is_ok());
+    state.old_utxo_set = state.utxo_set.clone();
 
     //wish there was an arcmutex macro or something
 
     let state = Arc::new(Mutex::new(state));
     //need hashmap since we're
-    let new_txs = Arc::new(Mutex::new(HashSet::<Tx>::new()));
+    //might have to track these as "tx groups" instead
+    //due to dependencies
+    //let new_txs = Arc::new(Mutex::new(HashSet::<Tx>::new()));
+    //TODO: use txgroups to prevent repeat txs
+    let new_txs = Arc::new(Mutex::new(Vec::<Tx>::new()));
 
     let listener = TcpListener::bind(format!("0.0.0.0:{PORT}")).await.unwrap();
 
@@ -49,7 +49,8 @@ async fn main() {
             while let Some(Ok(frame)) = framed_stream.next().await {
                 match frame {
                     TxFrame(txs) => {
-                        println!("New txs received");
+                        //println!("New txs received");
+                        //todo: verify that txs are valid
                         let mut new_txs = new_txs.lock().unwrap();
                         new_txs.extend(txs);
                     },
@@ -59,17 +60,15 @@ async fn main() {
                         if state.add_block_if_valid(block).is_ok() {
                                 println!("New block accepted");
                                 let mut new_txs = new_txs.lock().unwrap();
-                                new_txs.retain(|item| !block_clone.txs.iter().any(|x| x == item));
+                                new_txs.clear();
+                                //new_txs.retain(|item| !block_clone.txs.iter().any(|x| x == item));
                         } else {
                             println!("New block rejected");
                         }
                     },
                     GetNewTxpool => {
-                        println!("Tx pool requested");
-                        let new_txs = {
-                            let new_txs = new_txs.lock().unwrap();
-                            new_txs.iter().cloned().collect::<Vec<_>>()
-                        };
+                        //println!("Tx pool requested");
+                        let new_txs = { new_txs.lock().unwrap().clone() };
                         framed_stream.send(ServerFrame::NewTxPool(new_txs)).await.unwrap();
                     },
                     GetVersion => {

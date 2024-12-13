@@ -32,39 +32,42 @@ async fn main() {
     let serialized = fs::read("state.bin").expect("Error reading file");
     let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     state.utxo_set = state.verify_all_blocks().unwrap();
+    state.old_utxo_set = state.utxo_set.clone();
 
-    let mut new_txs = Vec::new();
-    framed.send(ClientFrame::GetNewTxpool).await;
-    while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
-        if !txs.is_empty() {
-            new_txs = txs;
-            break;
-        } else {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            framed.send(ClientFrame::GetNewTxpool).await;
+    loop {
+        let mut server_txs = Vec::new();
+        println!("Requesting new txpool");
+
+        framed.send(ClientFrame::GetNewTxpool).await;
+        while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
+            if !txs.is_empty() {
+                server_txs = txs;
+                break;
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                framed.send(ClientFrame::GetNewTxpool).await.unwrap();
+            }
         }
+
+        //get hash to use for mining
+        framed.send(ClientFrame::GetLastHash).await;
+        let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {
+            hash
+        } else {
+            panic!("Expected server hash");
+        };
+
+        let mut new_block = Block::new();
+        new_block.txs = server_txs;
+        new_block.prev_hash = prev_hash;
+        new_block.nonce = new_block.mine();
+        assert!(state.add_block_if_valid(new_block.clone()).is_ok());
+
+        //assert!(state.verify_block(&state.old_utxo_set, &state.blocks.last().unwrap(), &new_block).is_ok());
+
+        println!("sending");
+        framed.send(ClientFrame::Mined(new_block)).await.unwrap();
     }
-
-    framed.send(ClientFrame::GetLastHash).await;
-    //shouldn't need this but lets see if it works with it first
-
-    println!("Got prev block hash");
-    let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {
-        println!("Server hash: {:?}", hash);
-        hash
-    } else {
-        panic!();
-    };
-    println!("Local hash: {:?}", state.blocks.last().unwrap().get_hash());
-
-    let mut new_block = Block::new();
-    new_block.txs = new_txs;
-    new_block.prev_hash = prev_hash;
-    new_block.nonce = new_block.mine();
-    assert!(state.add_block_if_valid(new_block.clone()).is_ok());
-
-    println!("sending");
-    framed.send(ClientFrame::Mined(new_block)).await.unwrap();
 }
 
 /*
