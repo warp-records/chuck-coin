@@ -39,7 +39,7 @@ async fn main() {
 
     loop {
         let (socket, addr) = listener.accept().await.unwrap();
-        println!("New connection from: {}", addr);
+        println!("New connection from: {addr}");
 
         let mut framed_stream = Framed::new(socket, ServerCodec);
         let new_txs = new_txs.clone();
@@ -75,6 +75,7 @@ async fn main() {
                         framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await.unwrap();
                     },
                     GetLastHash => {
+                        println!("Last hash requested");
                         let last_hash = {
                             //change this later
                             let blocks = state.lock().unwrap().blocks.clone();

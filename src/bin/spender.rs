@@ -50,8 +50,8 @@ async fn main() {
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
         println!("Block successfully verified!");
 
-        framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await;
         println!("Submitting 10 test transactions");
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
+        //tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
         //}
 }
