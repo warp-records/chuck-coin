@@ -49,7 +49,7 @@ async fn main() {
             }
         }
 
-        while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
+        //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
         //get hash to use for mining
         framed.send(ClientFrame::GetLastHash).await.unwrap();
         let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {

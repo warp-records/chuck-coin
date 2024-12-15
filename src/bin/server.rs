@@ -51,13 +51,18 @@ async fn main() {
                     TxFrame(txs) => {
                         println!("New txs received");
                         //todo: verify that txs are valid
-                        let mut new_txs = new_txs.lock().unwrap();
-                        new_txs.extend(txs);
+                        {
+                            let mut new_txs = new_txs.lock().unwrap();
+                            new_txs.extend(txs);
+                        }
                     },
                     Mined(block) => {
-                        let mut state = state.lock().unwrap();
-                        let block_clone = block.clone();
-                        if state.add_block_if_valid(block).is_ok() {
+                        let add_result = {
+                            state.lock().unwrap().add_block_if_valid(block.clone())
+                        };
+                        //let block_clone = block.clone();
+
+                        if add_result.is_ok() {
                                 println!("New block accepted");
                                 let mut new_txs = new_txs.lock().unwrap();
                                 new_txs.clear();

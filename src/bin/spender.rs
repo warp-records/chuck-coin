@@ -54,4 +54,5 @@ async fn main() {
         framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
         //tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
         //}
+        framed.send(ClientFrame::GetVersion).await.unwrap();
 }
