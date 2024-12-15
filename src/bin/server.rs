@@ -47,7 +47,8 @@ async fn main() {
         let state = state.clone();
         tokio::spawn(async move {
 
-            while let Some(Ok(frame)) = framed_stream.next().await {
+            while let Some(frame_res) = framed_stream.next().await {
+                let frame = frame_res.expect("Erroneous frame received");
                 match frame {
                     TxFrame(txs) => {
                         println!("New txs received");
