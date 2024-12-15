@@ -1,6 +1,7 @@
 
 //use tokio_serde::{Serializer, Deserializer, Framed};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio_util::codec::{Framed};
 use futures::{StreamExt, SinkExt};
 use coin::block::*;
@@ -52,19 +53,19 @@ async fn main() {
                         println!("New txs received");
                         //todo: verify that txs are valid
                         {
-                            let mut new_txs = new_txs.lock().unwrap();
+                            let mut new_txs = new_txs.lock().await;
                             new_txs.extend(txs);
                         }
                     },
                     Mined(block) => {
                         let add_result = {
-                            state.lock().unwrap().add_block_if_valid(block.clone())
+                            state.lock().await.add_block_if_valid(block.clone())
                         };
                         //let block_clone = block.clone();
 
                         if add_result.is_ok() {
                                 println!("New block accepted");
-                                let mut new_txs = new_txs.lock().unwrap();
+                                let mut new_txs = new_txs.lock().await;
                                 new_txs.clear();
                                 //new_txs.retain(|item| !block_clone.txs.iter().any(|x| x == item));
                         } else {
@@ -73,7 +74,7 @@ async fn main() {
                     },
                     GetNewTxpool => {
                         println!("Tx pool requested");
-                        let new_txs = { new_txs.lock().unwrap().clone() };
+                        let new_txs = { new_txs.lock().await.clone() };
                         framed_stream.send(ServerFrame::NewTxPool(new_txs)).await.unwrap();
                     },
                     GetVersion => {
@@ -83,7 +84,7 @@ async fn main() {
                         println!("Last hash requested");
                         let last_hash = {
                             //change this later
-                            let blocks = state.lock().unwrap().blocks.clone();
+                            let blocks = state.lock().await.blocks.clone();
                             blocks.last().unwrap().get_hash()
                         };
 
