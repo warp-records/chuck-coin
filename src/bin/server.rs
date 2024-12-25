@@ -10,7 +10,7 @@ use ClientFrame::*;
 
 
 use std::fs;
-use tokio::net::TcpListener;
+use tokio::{join, net::TcpListener};
 
 //enum ConnectionType {
 //    Spender,
@@ -44,7 +44,7 @@ async fn main() {
         let mut framed_stream = Framed::new(socket, ServerCodec);
         let new_txs = new_txs.clone();
         let state = state.clone();
-        tokio::spawn(async move {
+        let new_task = tokio::spawn(async move {
 
             while let Some(Ok(frame)) = framed_stream.next().await {
                 match frame {
@@ -67,12 +67,12 @@ async fn main() {
                         }
                     },
                     GetNewTxpool => {
-                        println!("Tx pool requested");
+                        //println!("Tx pool requested");
                         let new_txs = { new_txs.lock().unwrap().clone() };
-                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await.unwrap();
+                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await;
                     },
                     GetVersion => {
-                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await.unwrap();
+                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await;
                     },
                     GetLastHash => {
                         println!("Last hash requested");
@@ -82,8 +82,14 @@ async fn main() {
                             blocks.last().unwrap().get_hash()
                         };
 
-                        framed_stream.send(ServerFrame::LastBlockHash(last_hash)).await.unwrap();
+                        framed_stream.send(ServerFrame::LastBlockHash(last_hash)).await;
+                    },
+                    GetBlockchain => {
+                        println!("Blockchain requested");
+                        let block_chain = { state.lock().unwrap().blocks.clone() };
+                        framed_stream.send(ServerFrame::BlockChain(block_chain)).await;
                     }
+
 
                     //do later
                     _ => {
@@ -93,6 +99,8 @@ async fn main() {
             }
 
         });
+
+        join!(new_task);
         //match
 
     }

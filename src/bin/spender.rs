@@ -5,7 +5,7 @@ use tokio_util::codec::{Framed};
 use coin::block::*;
 use coin::user::*;
 use coin::frametype::*;
-
+use std::collections::HashMap;
 use std::fs;
 use tokio::net::TcpStream;
 
@@ -29,10 +29,18 @@ async fn main() {
         println!("Server version: {}", version);
     }
 
-    let serialized = fs::read("state.bin").expect("Error reading file");
-    let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
-    state.utxo_set = state.verify_all_blocks().unwrap();
-    state.old_utxo_set = state.utxo_set.clone();
+    //let serialized = fs::read("state.bin").expect("Error reading file");
+    //let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
+    framed.send(ClientFrame::GetBlockchain).await;
+    let Some(Ok(ServerFrame::BlockChain(blockchain))) = framed.next().await else {
+        panic!("rip");
+    };
+    let mut state = State {
+        blocks: blockchain,
+        utxo_set: HashMap::new(),
+        old_utxo_set: HashMap::new(),
+    };
+    if state.verify_all_and_update().is_err() { panic!("ur fucked lmao"); }
 
     //use my own key here
     //for _ in 0..10 {

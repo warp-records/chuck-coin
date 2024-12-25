@@ -10,7 +10,7 @@ use tokio_util::codec::{Framed};
 use coin::block::*;
 use coin::user::*;
 use coin::frametype::*;
-
+use std::collections::HashMap;
 use std::fs;
 use serde::*;
 use tokio::{
@@ -29,10 +29,16 @@ async fn main() {
         println!("Server version: {}", version);
     }
 
-    let serialized = fs::read("state.bin").expect("Error reading file");
-    let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
-    state.utxo_set = state.verify_all_blocks().unwrap();
-    state.old_utxo_set = state.utxo_set.clone();
+    framed.send(ClientFrame::GetBlockchain).await;
+    let Some(Ok(ServerFrame::BlockChain(blockchain))) = framed.next().await else {
+        panic!("rip");
+    };
+    let mut state = State {
+        blocks: blockchain,
+        utxo_set: HashMap::new(),
+        old_utxo_set: HashMap::new(),
+    };
+    if state.verify_all_and_update().is_err() { panic!("ur fucked lmao"); }
 
     loop {
         let mut server_txs = Vec::new();
@@ -49,7 +55,7 @@ async fn main() {
             }
         }
 
-        while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
+        //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
         //get hash to use for mining
         framed.send(ClientFrame::GetLastHash).await.unwrap();
         let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {

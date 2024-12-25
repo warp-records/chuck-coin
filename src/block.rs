@@ -25,8 +25,9 @@ const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 //will prune blocks later
 pub struct State {
     pub blocks: Vec<Block>,
-    //need to keep an old copy so that we can make
-    //transactions while having an old copy for
+    //old_utxo_set is needed so we can create multiple new transactions
+    //without adding them to the block yet, without having to verfiy
+    //all the old blocks again
     //verify_block to use
     #[serde(skip)]
     pub old_utxo_set: HashMap<Outpoint, TxOutput>,
@@ -178,12 +179,18 @@ impl State {
 
         pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
             let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block)?;
+            self.blocks.push(block);
             self.utxo_set = new_utxo_set.clone();
             self.old_utxo_set = new_utxo_set;
-            self.blocks.push(block);
 
             Ok(())
         }
+
+    pub fn verify_all_and_update(&mut self) -> Result<(), BlockErr>{
+        self.utxo_set = self.verify_all_blocks()?;
+        self.old_utxo_set = self.utxo_set.clone();
+        Ok(())
+    }
 }
 
 //lol XD
