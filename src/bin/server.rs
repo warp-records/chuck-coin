@@ -90,11 +90,6 @@ async fn main() {
                         framed_stream.send(ServerFrame::BlockChain(block_chain)).await;
                     }
 
-
-                    //do later
-                    _ => {
-                        unimplemented!();
-                    }
                 }
             }
 

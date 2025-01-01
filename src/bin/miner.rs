@@ -57,16 +57,10 @@ async fn main() {
 
         //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
         //get hash to use for mining
-        framed.send(ClientFrame::GetLastHash).await.unwrap();
-        let prev_hash = if let Some(Ok(ServerFrame::LastBlockHash(hash))) = framed.next().await {
-            hash
-        } else {
-            panic!("Expected server hash");
-        };
 
         let mut new_block = Block::new();
         new_block.txs = server_txs;
-        new_block.prev_hash = prev_hash;
+        new_block.prev_hash = state.blocks.last().unwrap().get_hash();
         new_block.nonce = new_block.mine();
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 

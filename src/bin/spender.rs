@@ -32,8 +32,9 @@ async fn main() {
     //let serialized = fs::read("state.bin").expect("Error reading file");
     //let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     framed.send(ClientFrame::GetBlockchain).await;
-    let Some(Ok(ServerFrame::BlockChain(blockchain))) = framed.next().await else {
-        panic!("rip");
+    let res = framed.next().await.unwrap();
+    let Ok(ServerFrame::BlockChain(blockchain)) = res else {
+
     };
     let mut state = State {
         blocks: blockchain,
@@ -50,7 +51,8 @@ async fn main() {
         //let user = User::from_priv("EEADCC3CEC9EC11F6B172C800F846AAD5AEE59D2308BE01429B82393ACDE46C8");
         let user = User::random();
 
-        for _ in 0..10 {
+        const NUM_TX: u64 = 13;
+        for _ in 0..NUM_TX {
             new_block.transact(&mut state.utxo_set, &signing, &user.verifying, 5).unwrap();
         }
         new_block.prev_hash = state.blocks.last().unwrap().get_hash();
@@ -58,8 +60,6 @@ async fn main() {
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
         println!("Block successfully verified!");
 
-        println!("Submitting 10 test transactions");
+        println!("Submitting {NUM_TX} test transactions");
         framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
-        //tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-        //}
 }
