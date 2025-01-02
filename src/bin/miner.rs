@@ -31,6 +31,8 @@ async fn main() {
 
     framed.send(ClientFrame::GetBlockchain).await;
     let mut blockchain = Vec::new();
+    //just discard other frames for now, might have a
+    //frame buffer in the future ( ˘ ³˘)
     while let Some(Ok(frame)) = framed.next().await {
         match frame {
             ServerFrame::BlockChain(data) => {
@@ -51,27 +53,60 @@ async fn main() {
     if state.verify_all_and_update().is_err() { panic!("ur fucked lmao"); }
 
     loop {
-        let mut server_txs = Vec::new();
+        let mut tx_groups = Vec::new();
 
+        framed.send(ClientFrame::GetLastHash).await;
+        let mut last_hash = BLANK_BLOCK_HASH;
+        while let Some(Ok(frame)) = framed.next().await {
+            match frame {
+                ServerFrame::LastBlockHash(hash) => {
+                    last_hash = hash;
+                    break;
+                },
+                _ => {
+                    continue;
+                }
+            }
+        }
+        //kinda hacky wacky
+        if last_hash != state.blocks.last().unwrap().get_hash() {
+            state.blocks.pop();
+        }
+
+
+        framed.send(ClientFrame::GetNewTxpool).await;
+        println!("Requesting new txpool");
         framed.send(ClientFrame::GetNewTxpool).await;
         while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
             if !txs.is_empty() {
-                server_txs = txs;
+                tx_groups = txs;
                 break;
             } else {
                 tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 framed.send(ClientFrame::GetNewTxpool).await.unwrap();
             }
 
-            println!("Requesting new txpool");
         }
 
         //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
         //get hash to use for mining
 
         let mut new_block = Block::new();
-        new_block.txs = server_txs;
         new_block.prev_hash = state.blocks.last().unwrap().get_hash();
+        let prev_block = &state.blocks.last().unwrap();
+
+        let mut utxo_set = state.old_utxo_set.clone();
+        for group in tx_groups {
+            //idk if I should clone this lol
+            new_block.txs.extend(group.clone());
+            //new_block.nonce = new_block.mine();
+
+            if let Ok(new_utxo_set) = state.verify_block(&utxo_set, &prev_block, &new_block, true) {
+                utxo_set = new_utxo_set;
+            } else {
+                new_block.txs.truncate(new_block.txs.len() - group.len());
+            }
+        }
         new_block.nonce = new_block.mine();
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 

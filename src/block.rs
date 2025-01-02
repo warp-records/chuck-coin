@@ -19,7 +19,7 @@ use k256::{
 };
 
 pub type BlockHash = [u8; 32];
-const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
+pub const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
 
 #[derive(Serialize, Deserialize)]
 //will prune blocks later
@@ -95,7 +95,7 @@ impl State {
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
         while let Some(block) = block_iter.next() {
-            utxo_set = self.verify_block(&utxo_set, prev_block, block)?;
+            utxo_set = self.verify_block(&utxo_set, prev_block, block, false)?;
             prev_block = block;
         }
 
@@ -116,7 +116,7 @@ impl State {
 
     //can't use this syntax for some reason
     //type UtxoSet = HashMap<Outpoint, TxOutput>;
-    pub fn verify_block(&self, old_utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
+    pub fn verify_block(&self, old_utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block, ignore_work: bool) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
             let mut hasher = Sha3_256::new();
             let mut utxo_set = old_utxo_set.clone();
             //keep track of balances
@@ -178,7 +178,7 @@ impl State {
         }
 
         pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
-            let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block)?;
+            let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block, false)?;
             self.blocks.push(block);
             self.utxo_set = new_utxo_set.clone();
             self.old_utxo_set = new_utxo_set;
@@ -203,7 +203,8 @@ impl State {
 impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 1_000;
+    //lower values are harder
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000;
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
@@ -309,7 +310,12 @@ impl Block {
     }
 
     pub fn verify_work(&self) -> bool {
+        self.get_work_amount() <= Self::WORK_DIFFICULTY
+    }
 
+    //must be updated so you can check if one blockchain has more work than
+    //the other
+    pub fn get_work_amount(&self) -> u64 {
         let mut hasher = Sha3_256::new();
         let block_hash = self.get_hash();
 
@@ -318,7 +324,7 @@ impl Block {
         let work_hash = hasher.finalize();
         let work_hash_64 = u64::from_le_bytes(work_hash[0..8].try_into().unwrap());
 
-        work_hash_64 <= Self::WORK_DIFFICULTY
+        work_hash_64
     }
 
     pub fn mine(&self) -> u64 {

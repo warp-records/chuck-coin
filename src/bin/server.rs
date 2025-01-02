@@ -17,9 +17,7 @@ use tokio::{join, net::TcpListener};
 //    Miner,
 //}
 
-
-//#[tokio::main]
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
     println!("Starting server");
     let serialized = fs::read("state.bin").expect("Error reading file");
@@ -35,7 +33,7 @@ async fn main() {
     //due to dependencies
 
     //TODO: use txgroups to prevent repeat txs
-    let new_txs = Arc::new(Mutex::new(Vec::<Tx>::new()));
+    let new_txs = Arc::new(Mutex::new(Vec::<Vec::<Tx>>::new()));
 
     let listener = TcpListener::bind(format!("0.0.0.0:{PORT}")).await.unwrap();
 
@@ -54,7 +52,7 @@ async fn main() {
                         println!("New txs received");
                         //todo: verify that txs are valid
                         let mut new_txs = { new_txs.lock().unwrap() };
-                        new_txs.extend(txs);
+                        new_txs.push(txs);
                     },
                     Mined(block) => {
                         let mut state = state.lock().unwrap();

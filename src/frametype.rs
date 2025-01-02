@@ -28,7 +28,7 @@ pub enum ServerFrame {
     //Read this from cargotoml
     Version(String),
     //Client gets to decide which txs to mine
-    NewTxPool(Vec<Tx>),
+    NewTxPool(Vec<Vec<Tx>>),
     LastBlockHash(BlockHash),
     BlockChain(Vec<Block>),
 }
