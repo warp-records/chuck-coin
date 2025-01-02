@@ -17,7 +17,9 @@ use tokio::{join, net::TcpListener};
 //    Miner,
 //}
 
-#[tokio::main]
+
+//#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     println!("Starting server");
     let serialized = fs::read("state.bin").expect("Error reading file");
@@ -31,7 +33,7 @@ async fn main() {
     //need hashmap since we're
     //might have to track these as "tx groups" instead
     //due to dependencies
-    //let new_txs = Arc::new(Mutex::new(HashSet::<Tx>::new()));
+
     //TODO: use txgroups to prevent repeat txs
     let new_txs = Arc::new(Mutex::new(Vec::<Tx>::new()));
 
@@ -51,12 +53,11 @@ async fn main() {
                     TxFrame(txs) => {
                         println!("New txs received");
                         //todo: verify that txs are valid
-                        let mut new_txs = new_txs.lock().unwrap();
+                        let mut new_txs = { new_txs.lock().unwrap() };
                         new_txs.extend(txs);
                     },
                     Mined(block) => {
                         let mut state = state.lock().unwrap();
-                        let block_clone = block.clone();
                         if state.add_block_if_valid(block).is_ok() {
                                 println!("New block accepted");
                                 let mut new_txs = new_txs.lock().unwrap();
@@ -95,7 +96,6 @@ async fn main() {
 
         });
 
-        join!(new_task);
         //match
 
     }

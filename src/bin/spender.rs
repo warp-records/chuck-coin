@@ -23,6 +23,7 @@ async fn main() {
     let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}")).await.unwrap();
     let mut framed = Framed::new(stream, MinerCodec);
 
+
     // Get version
     framed.send(ClientFrame::GetVersion).await.unwrap();
     if let Some(Ok(ServerFrame::Version(version))) = framed.next().await {
@@ -32,9 +33,18 @@ async fn main() {
     //let serialized = fs::read("state.bin").expect("Error reading file");
     //let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
     framed.send(ClientFrame::GetBlockchain).await;
-    let res = framed.next().await.unwrap();
-    let Ok(ServerFrame::BlockChain(blockchain)) = res else {
-
+    let mut blockchain = Vec::new();
+    while let Some(Ok(frame)) = framed.next().await {
+        match frame {
+            ServerFrame::BlockChain(data) => {
+                blockchain = data;
+                break;
+            },
+            _ => {
+                continue;
+            }
+        }
+        //panic!("Expected blockchain frame");
     };
     let mut state = State {
         blocks: blockchain,
@@ -45,21 +55,23 @@ async fn main() {
 
     //use my own key here
     //for _ in 0..10 {
-        let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+    let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
-        let mut new_block = Block::new();
-        //let user = User::from_priv("EEADCC3CEC9EC11F6B172C800F846AAD5AEE59D2308BE01429B82393ACDE46C8");
-        let user = User::random();
+    let mut new_block = Block::new();
+    //let user = User::from_priv("EEADCC3CEC9EC11F6B172C800F846AAD5AEE59D2308BE01429B82393ACDE46C8");
+    let user = User::random();
 
-        const NUM_TX: u64 = 13;
-        for _ in 0..NUM_TX {
-            new_block.transact(&mut state.utxo_set, &signing, &user.verifying, 5).unwrap();
-        }
-        new_block.prev_hash = state.blocks.last().unwrap().get_hash();
-        new_block.nonce = new_block.mine();
-        assert!(state.add_block_if_valid(new_block.clone()).is_ok());
-        println!("Block successfully verified!");
+    //server freezes when sending a lot of txs
+    const NUM_TX: u64 = 20;
+    for _ in 0..NUM_TX {
+        new_block.transact(&mut state.utxo_set, &signing, &user.verifying, 5).unwrap();
+    }
+    new_block.prev_hash = state.blocks.last().unwrap().get_hash();
+    new_block.nonce = new_block.mine();
+    assert!(state.add_block_if_valid(new_block.clone()).is_ok());
+    println!("Block successfully verified!");
 
-        println!("Submitting {NUM_TX} test transactions");
-        framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
+    println!("Submitting {NUM_TX} test transactions");
+    framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
+    println!("Sent");
 }

@@ -42,7 +42,6 @@ async fn main() {
 
     loop {
         let mut server_txs = Vec::new();
-        println!("Requesting new txpool");
 
         framed.send(ClientFrame::GetNewTxpool).await;
         while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
@@ -50,9 +49,11 @@ async fn main() {
                 server_txs = txs;
                 break;
             } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                 framed.send(ClientFrame::GetNewTxpool).await.unwrap();
             }
+
+            println!("Requesting new txpool");
         }
 
         //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}

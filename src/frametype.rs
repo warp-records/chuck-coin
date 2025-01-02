@@ -4,7 +4,7 @@ use crate::tx::*;
 use serde::*;
 use std::io;
 use tokio_util::codec::{Decoder, Encoder};
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use futures::StreamExt;
 
 //sent from client
@@ -17,6 +17,7 @@ pub enum ClientFrame {
     GetLastHash,
     GetNewTxpool,
     GetVersion,
+
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,8 +35,78 @@ pub enum ServerFrame {
 
 //should probably move this to a config file
 pub const PORT: u16 = 1337;
-pub const SERVER_IP: &str = "127.0.0.1";//129.213.163.237
+pub const SERVER_IP: &str = "0.0.0.0";
+pub struct MinerCodec;
 
+impl Decoder for MinerCodec {
+    type Item = ServerFrame;
+    type Error = io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if src.len() < 4 { return Ok(None) }
+
+        let msg_len = u32::from_be_bytes([src[0], src[1], src[2], src[3]]) as usize;
+        if src.len() < 4 + msg_len { return Ok(None) }
+
+        let msg = src[4..4+msg_len].to_vec();
+        src.advance(4 + msg_len);
+
+        bincode::deserialize(&msg)
+            .map(Some)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    }
+}
+
+impl Encoder<ClientFrame> for MinerCodec {
+    type Error = io::Error;
+
+    fn encode(&mut self, item: ClientFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let msg = bincode::serialize(&item)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        let len = msg.len() as u32;
+        dst.extend_from_slice(&len.to_be_bytes());
+        dst.extend_from_slice(&msg);
+        Ok(())
+    }
+}
+
+pub struct ServerCodec;
+
+impl Decoder for ServerCodec {
+    type Item = ClientFrame;
+    type Error = io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if src.len() < 4 { return Ok(None) }
+
+        let msg_len = u32::from_be_bytes([src[0], src[1], src[2], src[3]]) as usize;
+        if src.len() < 4 + msg_len { return Ok(None) }
+
+        let msg = src[4..4+msg_len].to_vec();
+        src.advance(4 + msg_len);
+
+        bincode::deserialize(&msg)
+            .map(Some)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    }
+}
+
+impl Encoder<ServerFrame> for ServerCodec {
+    type Error = io::Error;
+
+    fn encode(&mut self, item: ServerFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let msg = bincode::serialize(&item)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        let len = msg.len() as u32;
+        dst.extend_from_slice(&len.to_be_bytes());
+        dst.extend_from_slice(&msg);
+        Ok(())
+    }
+}
+
+/*
 //consider merging or using a macro
 pub struct MinerCodec;
 
@@ -93,3 +164,4 @@ impl Encoder<ServerFrame> for ServerCodec {
             Ok(())
         }
 }
+ */
