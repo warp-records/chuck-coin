@@ -78,7 +78,7 @@ impl State {
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
 
-        let mut prev_block = block_iter.next().unwrap();
+        let mut prev_block = block_iter.next().expect("No blocks found");
         let root_tx = prev_block.txs[0].clone();
         let my_verifying_key: VerifyingKey = vk_from_encoded_str(
             "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\

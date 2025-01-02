@@ -30,8 +30,18 @@ async fn main() {
     }
 
     framed.send(ClientFrame::GetBlockchain).await;
-    let Some(Ok(ServerFrame::BlockChain(blockchain))) = framed.next().await else {
-        panic!("rip");
+    let mut blockchain = Vec::new();
+    while let Some(Ok(frame)) = framed.next().await {
+        match frame {
+            ServerFrame::BlockChain(data) => {
+                blockchain = data;
+                break;
+            },
+            _ => {
+                continue;
+            }
+        }
+        //panic!("Expected blockchain frame");
     };
     let mut state = State {
         blocks: blockchain,
@@ -49,7 +59,7 @@ async fn main() {
                 server_txs = txs;
                 break;
             } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 framed.send(ClientFrame::GetNewTxpool).await.unwrap();
             }
 
