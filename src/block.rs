@@ -1,22 +1,24 @@
 #![allow(unused_imports)]
 
-use serde::*;
-use std::fs;
-use rand::prelude::*;
-use bitvec::prelude::*;
-use std::hash::Hash;
 use crate::tx::*;
 use crate::user::*;
-use std::collections::HashMap;
+use bitvec::prelude::*;
 use ethnum::*;
+use k256::PublicKey;
+use k256::{
+    ecdsa::{signature::Signer, signature::Verifier, Signature, SigningKey, VerifyingKey},
+    elliptic_curve::sec1::*,
+    Secp256k1, SecretKey,
+};
+use rand::prelude::*;
+use serde::*;
 use serde::{Deserialize, Serialize};
 use sha3::*;
-use k256::{
-    Secp256k1,
-    ecdsa::{SigningKey, signature::Verifier, VerifyingKey, Signature, signature::Signer},
-    SecretKey,
-    elliptic_curve::{ sec1::*, PublicKey},
-};
+use std::collections::HashMap;
+use std::fs;
+use std::hash::Hash;
+use std::os;
+use std::process::Output;
 
 pub type BlockHash = [u8; 32];
 pub const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
@@ -83,12 +85,16 @@ impl State {
         let my_verifying_key: VerifyingKey = vk_from_encoded_str(
             "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\
             61ABE15BB1F1EC90871F5034A7B2BBF43F33C99225EF70C6F463B3\
-            93973C55E85382F90F2935E"
-        ).into();
+            93973C55E85382F90F2935E",
+        )
+        .into();
 
-        if prev_block.txs.len() > 1 || root_tx.outputs.len() > 1 ||
-            !my_verifying_key.verify(&prev_block.txs[0].txid, &prev_block.txs[0].signature).is_ok() {
-
+        if prev_block.txs.len() > 1
+            || root_tx.outputs.len() > 1
+            || !my_verifying_key
+                .verify(&prev_block.txs[0].txid, &prev_block.txs[0].signature)
+                .is_ok()
+        {
             return Err(BlockErr::GenesisBlock);
         }
 
@@ -102,10 +108,21 @@ impl State {
         Ok(utxo_set)
     }
 
+    pub fn blank() -> State {
+        State {
+            old_utxo_set: HashMap::new(),
+            utxo_set: HashMap::new(),
+            blocks: Vec::new(),
+        }
+    }
+
     pub fn with_genesis_block() -> State {
         let mut utxo_set = HashMap::new();
         let block = Block::genesis_block();
-        utxo_set.insert(Outpoint(block.txs[0].txid, 0), block.txs[0].outputs[0].clone());
+        utxo_set.insert(
+            Outpoint(block.txs[0].txid, 0),
+            block.txs[0].outputs[0].clone(),
+        );
 
         State {
             blocks: vec![block],
@@ -116,81 +133,108 @@ impl State {
 
     //can't use this syntax for some reason
     //type UtxoSet = HashMap<Outpoint, TxOutput>;
-    pub fn verify_block(&self, old_utxo_set: &HashMap<Outpoint, TxOutput>, prev_block: &Block, block: &Block, ignore_work: bool) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
-            let mut hasher = Sha3_256::new();
-            let mut utxo_set = old_utxo_set.clone();
-            //keep track of balances
-            let mut input_total: u64 = 0;
-            let mut output_total: u64 = 0;
+    pub fn verify_block(
+        &self,
+        old_utxo_set: &HashMap<Outpoint, TxOutput>,
+        prev_block: &Block,
+        block: &Block,
+        ignore_work: bool,
+    ) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
+        let mut hasher = Sha3_256::new();
+        let mut utxo_set = old_utxo_set.clone();
+        //keep track of balances
+        let mut input_total: u64 = 0;
+        let mut output_total: u64 = 0;
 
-            for tx in &block.txs {
-                //TODO: verify tx signature
+        for tx in &block.txs {
+            //TODO: verify tx signature
 
-                for input in tx.inputs.iter() {
-                    //check that all inputs being used exited previously
-                    let Some(prev_out) = utxo_set.get(&input.prev_out) else {
-                        //uh oh...
-                        return Err(BlockErr::FalseInput);
-                    };
+            for input in tx.inputs.iter() {
+                //check that all inputs being used exited previously
+                let Some(prev_out) = utxo_set.get(&input.prev_out) else {
+                    //uh oh...
+                    return Err(BlockErr::FalseInput);
+                };
 
-
-                    //outpoint must be outpoint of prev_out
-                    //make sure the owner authorized the transaction
-                    if !Block::verify_sig(input.signature, &TxPredicate::Pubkey(prev_out.recipient), &input.prev_out) {
-                        //nice try hackers
-                        return Err(BlockErr::Sig(input.signature));
-                    }
-
-                    //check last block hash
-                    hasher.update(&prev_block.as_bytes_no_nonce());
-                    let prev_hash = prev_block.get_hash();
-
-                    if prev_hash != block.prev_hash {
-                        return Err(BlockErr::PrevHash(block.prev_hash, prev_hash));
-                    }
-
-
-                    //pretty sure we DON'T have to check
-                    //the amount from each individual spender
-                    input_total += prev_out.amount;
-                    //whoops, forgot to add this lol
+                //outpoint must be outpoint of prev_out
+                //make sure the owner authorized the transaction
+                if !Block::verify_sig(
+                    input.signature,
+                    &TxPredicate::Pubkey(prev_out.recipient),
+                    &input.prev_out,
+                ) {
+                    //nice try hackers
+                    return Err(BlockErr::Sig(input.signature));
                 }
 
-                for (i, output) in tx.outputs.iter().enumerate() {
-                    output_total += output.amount;
-                    utxo_set.insert(Outpoint(tx.txid, i as u16), output.clone());
+                //check last block hash
+                hasher.update(&prev_block.as_bytes_no_nonce());
+                let prev_hash = prev_block.get_hash();
+
+                if prev_hash != block.prev_hash {
+                    return Err(BlockErr::PrevHash(block.prev_hash, prev_hash));
                 }
 
-                for input in tx.inputs.iter() {
-                    utxo_set.remove(&input.prev_out);
-                }
-
-                if output_total > input_total {
-                    return Err(BlockErr::Overspend(input_total, output_total));
-                }
+                //pretty sure we DON'T have to check
+                //the amount from each individual spender
+                input_total += prev_out.amount;
+                //whoops, forgot to add this lol
             }
 
-            if !block.verify_work() {
-                return Err(BlockErr::Nonce(block.nonce));
+            for (i, output) in tx.outputs.iter().enumerate() {
+                output_total += output.amount;
+                utxo_set.insert(Outpoint(tx.txid, i as u16), output.clone());
             }
 
-            Ok(utxo_set)
+            for input in tx.inputs.iter() {
+                utxo_set.remove(&input.prev_out);
+            }
+
+            if output_total > input_total {
+                return Err(BlockErr::Overspend(input_total, output_total));
+            }
         }
 
-        pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
-            let new_utxo_set = self.verify_block(&self.old_utxo_set, &self.blocks.last().unwrap(), &block, false)?;
-            self.blocks.push(block);
-            self.utxo_set = new_utxo_set.clone();
-            self.old_utxo_set = new_utxo_set;
-
-            Ok(())
+        if !block.verify_work() {
+            return Err(BlockErr::Nonce(block.nonce));
         }
 
-    pub fn verify_all_and_update(&mut self) -> Result<(), BlockErr>{
+        Ok(utxo_set)
+    }
+
+    pub fn add_block_if_valid(&mut self, block: Block) -> Result<(), BlockErr> {
+        let new_utxo_set = self.verify_block(
+            &self.old_utxo_set,
+            &self.blocks.last().unwrap(),
+            &block,
+            false,
+        )?;
+        self.blocks.push(block);
+        self.utxo_set = new_utxo_set.clone();
+        self.old_utxo_set = new_utxo_set;
+
+        Ok(())
+    }
+
+    pub fn verify_all_and_update(&mut self) -> Result<(), BlockErr> {
         self.utxo_set = self.verify_all_blocks()?;
         self.old_utxo_set = self.utxo_set.clone();
         Ok(())
     }
+
+    pub fn get_balance(&self, key: PublicKey) -> u64 {
+        let mut balance: u64 = 0;
+        //I hope I'm doing this right lol
+        for outpoint in self.utxo_set.keys() {
+            let prev_out = self.utxo_set.get(outpoint).unwrap();
+            if prev_out.recipient == key {
+                balance += prev_out.amount;
+            }
+        }
+
+        balance
+    }
+
 }
 
 //lol XD
@@ -221,14 +265,19 @@ impl Block {
     //check that signature equals the hash of tall transactions
     //and the transaction index combined, all signed by the spender
     pub fn verify_sig(sig: Signature, predicate: &TxPredicate, prev_out: &Outpoint) -> bool {
-
         let verifying_key = VerifyingKey::from(predicate.unwrap_key());
         verifying_key.verify(&prev_out.as_bytes(), &sig).is_ok()
     }
 
     //must be executed on the spenders hardware
     //since spender_priv is passed as an arugment
-    pub fn transact(&mut self, utxo_set: &mut HashMap<Outpoint, TxOutput>, spender_priv: &SigningKey, recipient_pub: &VerifyingKey, amount: u64) -> Result<&Tx, ()> {
+    pub fn transact(
+        &mut self,
+        utxo_set: &mut HashMap<Outpoint, TxOutput>,
+        spender_priv: &SigningKey,
+        recipient_pub: &VerifyingKey,
+        amount: u64,
+    ) -> Result<&Tx, ()> {
         let spender_pub = PublicKey::from(VerifyingKey::from(spender_priv.clone()));
         let recipient_pub = PublicKey::from(VerifyingKey::from(recipient_pub.clone()));
 
@@ -247,12 +296,14 @@ impl Block {
 
                 spendable.push(prev_out.clone());
                 balance += prev_out.amount;
-                if balance >= amount { break; }
+                if balance >= amount {
+                    break;
+                }
             }
         }
 
         if amount > balance {
-            return Err(())
+            return Err(());
         }
 
         //send the remainder of the last tx back to the user
@@ -269,7 +320,7 @@ impl Block {
         if split_last {
             let recipient_out = TxOutput {
                 spender: TxPredicate::Pubkey(spender_pub),
-                amount: amount-(balance-spendable.last().unwrap().amount),
+                amount: amount - (balance - spendable.last().unwrap().amount),
                 recipient: recipient_pub,
             };
 
@@ -296,7 +347,9 @@ impl Block {
         new_tx.signature = spender_priv.sign(&new_tx.txid);
 
         for input in new_tx.inputs.iter() {
-            utxo_set.remove(&input.prev_out).expect("Didn't find prev out");
+            utxo_set
+                .remove(&input.prev_out)
+                .expect("Didn't find prev out");
         }
         //critical part
         for (i, output) in new_tx.outputs.iter().enumerate() {

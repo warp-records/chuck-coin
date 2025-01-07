@@ -1,7 +1,7 @@
 
 use futures::{SinkExt, StreamExt};
 //use tokio_serde::{Serializer, Deserializer, Framed};
-use tokio_util::codec::{Framed};
+//use tokio_util::codec::{Framed};
 use coin::block::*;
 use coin::user::*;
 use coin::frametype::*;
@@ -22,7 +22,6 @@ async fn main() {
     // Connect to the server
     let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}")).await.unwrap();
     let mut framed = Framed::new(stream, MinerCodec);
-
 
     // Get version
     framed.send(ClientFrame::GetVersion).await.unwrap();

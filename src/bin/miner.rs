@@ -1,26 +1,26 @@
-
-use k256::ecdsa::Signature;
-use k256::{SecretKey, PublicKey};
+#![forbid(unsafe_code)]
 use bincode::deserialize;
 use futures::{SinkExt, StreamExt};
+use k256::ecdsa::Signature;
+use k256::{PublicKey, SecretKey};
 use std::collections::HashSet;
 //use tokio_serde::{Serializer, Deserializer, Framed};
-use std::sync::{Arc, Mutex};
-use tokio_util::codec::{Framed};
 use coin::block::*;
-use coin::user::*;
 use coin::frametype::*;
+use coin::user::*;
+use serde::*;
 use std::collections::HashMap;
 use std::fs;
-use serde::*;
-use tokio::{
-    net::{TcpListener, TcpStream}
-};
+use std::sync::{Arc, Mutex};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::codec::Framed;
 
 #[tokio::main]
 async fn main() {
     // Connect to the server
-    let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}")).await.unwrap();
+    let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}"))
+        .await
+        .unwrap();
     let mut framed = Framed::new(stream, MinerCodec);
 
     // Get version
@@ -38,19 +38,21 @@ async fn main() {
             ServerFrame::BlockChain(data) => {
                 blockchain = data;
                 break;
-            },
+            }
             _ => {
                 continue;
             }
         }
         //panic!("Expected blockchain frame");
-    };
+    }
     let mut state = State {
         blocks: blockchain,
         utxo_set: HashMap::new(),
         old_utxo_set: HashMap::new(),
     };
-    if state.verify_all_and_update().is_err() { panic!("ur fucked lmao"); }
+    if state.verify_all_and_update().is_err() {
+        panic!("ur fucked lmao");
+    }
 
     loop {
         let mut tx_groups = Vec::new();
@@ -62,7 +64,7 @@ async fn main() {
                 ServerFrame::LastBlockHash(hash) => {
                     last_hash = hash;
                     break;
-                },
+                }
                 _ => {
                     continue;
                 }
@@ -72,7 +74,6 @@ async fn main() {
         if last_hash != state.blocks.last().unwrap().get_hash() {
             state.blocks.pop();
         }
-
 
         framed.send(ClientFrame::GetNewTxpool).await;
         println!("Requesting new txpool");
@@ -85,7 +86,6 @@ async fn main() {
                 tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                 framed.send(ClientFrame::GetNewTxpool).await.unwrap();
             }
-
         }
 
         //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
