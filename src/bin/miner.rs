@@ -1,4 +1,11 @@
-#![forbid(unsafe_code)]
+
+
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::Bytes;
+use url::Url;
+
 use bincode::deserialize;
 use futures::{SinkExt, StreamExt};
 use k256::ecdsa::Signature;
@@ -18,32 +25,31 @@ use tokio_util::codec::Framed;
 #[tokio::main]
 async fn main() {
     // Connect to the server
-    let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}"))
-        .await
-        .unwrap();
-    let mut framed = Framed::new(stream, MinerCodec);
+    let url = format!("ws://{SERVER_IP}:{PORT}");
+    let request = url.into_client_request().unwrap();
+    let (ws_stream, _) = connect_async(request).await.unwrap();
+    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
     // Get version
-    framed.send(ClientFrame::GetVersion).await.unwrap();
-    if let Some(Ok(ServerFrame::Version(version))) = framed.next().await {
-        println!("Server version: {}", version);
+    let frame = ClientFrame::GetVersion;
+    let serialized = bincode::serialize(&frame).unwrap();
+    ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
+    if let Some(Ok(Message::Binary(data))) = ws_receiver.next().await {
+        if let Ok(ServerFrame::Version(version)) = bincode::deserialize(&data) {
+            println!("Server version: {}", version);
+        }
     }
 
-    framed.send(ClientFrame::GetBlockchain).await;
+    let serialized = bincode::serialize(&ClientFrame::GetBlockchain).unwrap();
+    ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
     let mut blockchain = Vec::new();
     //just discard other frames for now, might have a
     //frame buffer in the future ( ˘ ³˘)
-    while let Some(Ok(frame)) = framed.next().await {
-        match frame {
-            ServerFrame::BlockChain(data) => {
-                blockchain = data;
-                break;
-            }
-            _ => {
-                continue;
-            }
+    while let Some(Ok(Message::Binary(data))) = ws_receiver.next().await {
+        if let Ok(ServerFrame::BlockChain(data)) = bincode::deserialize(&data) {
+            blockchain = data;
+            break;
         }
-        //panic!("Expected blockchain frame");
     }
     let mut state = State {
         blocks: blockchain,
@@ -57,17 +63,14 @@ async fn main() {
     loop {
         let mut tx_groups = Vec::new();
 
-        framed.send(ClientFrame::GetLastHash).await;
+        let frame = ClientFrame::GetLastHash;
+        let serialized = bincode::serialize(&frame).unwrap();
+        ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
         let mut last_hash = BLANK_BLOCK_HASH;
-        while let Some(Ok(frame)) = framed.next().await {
-            match frame {
-                ServerFrame::LastBlockHash(hash) => {
-                    last_hash = hash;
-                    break;
-                }
-                _ => {
-                    continue;
-                }
+        while let Some(Ok(Message::Binary(data))) = ws_receiver.next().await {
+            if let Ok(ServerFrame::LastBlockHash(hash)) = bincode::deserialize(&data) {
+                last_hash = hash;
+                break;
             }
         }
         //kinda hacky wacky
@@ -75,20 +78,24 @@ async fn main() {
             state.blocks.pop();
         }
 
-        framed.send(ClientFrame::GetNewTxpool).await;
+        let frame = ClientFrame::GetNewTxpool;
+        let serialized_bytes = Bytes::from(bincode::serialize(&frame).unwrap());
+        ws_sender.send(Message::Binary(serialized_bytes.clone())).await.unwrap();
         println!("Requesting new txpool");
-        framed.send(ClientFrame::GetNewTxpool).await;
-        while let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
-            if !txs.is_empty() {
-                tx_groups = txs;
-                break;
-            } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                framed.send(ClientFrame::GetNewTxpool).await.unwrap();
+        ws_sender.send(Message::Binary(Bytes::from(serialized_bytes.clone()))).await.unwrap();
+        while let Some(Ok(Message::Binary(data))) = ws_receiver.next().await {
+            if let Ok(ServerFrame::NewTxPool(txs)) = bincode::deserialize(&data) {
+                if !txs.is_empty() {
+                    tx_groups = txs;
+                    break;
+                } else {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    ws_sender.send(Message::Binary(serialized_bytes.clone())).await.unwrap();
+                }
             }
         }
 
-        //while let Some(Ok(ServerFrame::NewTxPool(_))) = framed.next().await {}
+        //while let Some(Ok(ServerFrame::NewTxPool(_))) = ws_receiver.next().await {}
         //get hash to use for mining
 
         let mut new_block = Block::new();
@@ -111,33 +118,8 @@ async fn main() {
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 
         println!("sending");
-        framed.send(ClientFrame::Mined(new_block)).await.unwrap();
+        let frame = ClientFrame::Mined(new_block);
+        let serialized = bincode::serialize(&frame).unwrap();
+        ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
     }
 }
-
-/*
-// Mining loop
-loop {
-        // Get tx pool
-        framed.send(ClientFrame::GetNewTxpool).await.unwrap();
-
-        if let Some(Ok(ServerFrame::NewTxPool(txs))) = framed.next().await {
-            if txs.is_empty() {
-                println!("No transactions to mine");
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                continue;
-            }
-
-            println!("Mining block with {} transactions", txs.len());
-
-            // Create and mine a new block
-            let mut block = Block::new();
-            block.txs = txs;
-            block.nonce = block.mine();
-
-            println!("Found nonce: {}", block.nonce);
-
-            // Submit mined block
-            framed.send(ClientFrame::Mined(block)).await.unwrap();
-        }
-    } */

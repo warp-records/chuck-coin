@@ -1,4 +1,5 @@
 
+
 use futures::{SinkExt, StreamExt};
 //use tokio_serde::{Serializer, Deserializer, Framed};
 //use tokio_util::codec::{Framed};
@@ -7,8 +8,11 @@ use coin::user::*;
 use coin::frametype::*;
 use std::collections::HashMap;
 use std::fs;
-use tokio::net::TcpStream;
-
+use tokio_tungstenite::{connect_async, tungstenite, tungstenite::protocol::Message};
+use tungstenite::{ http::{Method, Request}, client::*};
+use url::Url;
+use bincode::{serialize, deserialize};
+use bytes::Bytes;
 
 //I have no fucking idea what I'm doing when
 //it comes to networking let's hope I can do this
@@ -20,28 +24,28 @@ async fn main() {
     println!("Spender go brrrrrrrrrr");
     //
     // Connect to the server
-    let stream = TcpStream::connect(format!("{SERVER_IP}:{PORT}")).await.unwrap();
-    let mut framed = Framed::new(stream, MinerCodec);
+    let url = format!("ws://{SERVER_IP}:{PORT}");
+    let ws_stream = connect_async(url.as_str().into_client_request().unwrap()).await.unwrap().0;
+    let (mut write, mut read) = ws_stream.split();
 
     // Get version
-    framed.send(ClientFrame::GetVersion).await.unwrap();
-    if let Some(Ok(ServerFrame::Version(version))) = framed.next().await {
-        println!("Server version: {}", version);
+    let get_version_msg = serialize(&ClientFrame::GetVersion).unwrap();
+    write.send(Message::Binary(Bytes::from(get_version_msg))).await.unwrap();
+    if let Some(Ok(Message::Binary(response))) = read.next().await {
+        if let Ok(ServerFrame::Version(version)) = deserialize(&response) {
+            println!("Server version: {}", version);
+        }
     }
 
     //let serialized = fs::read("state.bin").expect("Error reading file");
     //let mut state: State = bincode::deserialize(&serialized).expect("Error deserializing");
-    framed.send(ClientFrame::GetBlockchain).await;
+    let get_blockchain_msg = serialize(&ClientFrame::GetBlockchain).unwrap();
+    write.send(Message::Binary(Bytes::from(get_blockchain_msg))).await.unwrap();
     let mut blockchain = Vec::new();
-    while let Some(Ok(frame)) = framed.next().await {
-        match frame {
-            ServerFrame::BlockChain(data) => {
-                blockchain = data;
-                break;
-            },
-            _ => {
-                continue;
-            }
+    while let Some(Ok(Message::Binary(response))) = read.next().await {
+        if let Ok(ServerFrame::BlockChain(data)) = deserialize(&response) {
+            blockchain = data;
+            break;
         }
         //panic!("Expected blockchain frame");
     };
@@ -71,6 +75,7 @@ async fn main() {
     println!("Block successfully verified!");
 
     println!("Submitting {NUM_TX} test transactions");
-    framed.send(ClientFrame::TxFrame(new_block.txs.clone())).await.unwrap();
+    let tx_frame_msg = serialize(&ClientFrame::TxFrame(new_block.txs.clone())).unwrap();
+    write.send(Message::Binary(Bytes::from(tx_frame_msg))).await.unwrap();
     println!("Sent");
 }

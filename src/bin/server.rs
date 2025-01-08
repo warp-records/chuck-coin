@@ -1,4 +1,5 @@
 
+use std::env::consts::OS;
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use std::sync::{Arc, Mutex};
 use tokio_util::codec::{Framed};
@@ -7,7 +8,9 @@ use coin::block::*;
 use coin::tx::*;
 use coin::frametype::*;
 use ClientFrame::*;
-
+use tokio_tungstenite::*;
+use tungstenite::*;
+use bytes::Bytes;
 
 use std::fs;
 use tokio::{join, net::TcpListener};
@@ -38,15 +41,19 @@ async fn main() {
     let listener = TcpListener::bind(format!("0.0.0.0:{PORT}")).await.unwrap();
 
     loop {
-        let (socket, addr) = listener.accept().await.unwrap();
+        let (stream, addr) = listener.accept().await.unwrap();
         println!("New connection from: {addr}");
 
-        let mut framed_stream = Framed::new(socket, ServerCodec);
         let new_txs = new_txs.clone();
         let state = state.clone();
-        let new_task = tokio::spawn(async move {
 
-            while let Some(Ok(frame)) = framed_stream.next().await {
+        let new_task = tokio::spawn(async move {
+            let mut ws_stream = tokio_tungstenite::accept_async(stream).await.unwrap();
+            //let (read, write) = ws_stream.split();
+
+
+            while let Some(Ok(protocol::Message::Binary(msg))) = ws_stream.next().await {
+                let mut frame = bincode::deserialize(&msg).unwrap();
                 match frame {
                     TxFrame(txs) => {
                         println!("New txs received");
@@ -68,10 +75,13 @@ async fn main() {
                     GetNewTxpool => {
                         //println!("Tx pool requested");
                         let new_txs = { new_txs.lock().unwrap().clone() };
-                        framed_stream.send(ServerFrame::NewTxPool(new_txs)).await;
+                        let serialized = bincode::serialize(&ServerFrame::NewTxPool(new_txs)).unwrap();
+                        //ws_stream.send(Message::Binary(Bytes::from(serialized))).await;
+                        ws_stream.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
                     },
                     GetVersion => {
-                        framed_stream.send(ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).await;
+                        let serialized = bincode::serialize(&ServerFrame::Version(env!("CARGO_PKG_VERSION").to_string())).unwrap();
+                        ws_stream.send(Message::Binary(Bytes::from(serialized))).await;
                     },
                     GetLastHash => {
                         println!("Last hash requested");
@@ -81,12 +91,16 @@ async fn main() {
                             blocks.last().unwrap().get_hash()
                         };
 
-                        framed_stream.send(ServerFrame::LastBlockHash(last_hash)).await;
+                        //bincode::serialize(&)
+                        let serialized = bincode::serialize(&ServerFrame::LastBlockHash(last_hash)).unwrap();
+                        ws_stream.send(Message::Binary(Bytes::from(serialized))).await;
                     },
                     GetBlockchain => {
                         println!("Blockchain requested");
                         let block_chain = { state.lock().unwrap().blocks.clone() };
-                        framed_stream.send(ServerFrame::BlockChain(block_chain)).await;
+
+                        let serialized = bincode::serialize(&ServerFrame::BlockChain(block_chain)).unwrap();
+                        ws_stream.send(Message::Binary(Bytes::from(serialized))).await;
                     }
 
                 }
