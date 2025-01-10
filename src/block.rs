@@ -195,7 +195,7 @@ impl State {
             }
         }
 
-        if !block.verify_work() {
+        if !ignore_work && !block.verify_work() {
             return Err(BlockErr::Nonce(block.nonce));
         }
 
@@ -210,6 +210,8 @@ impl State {
             false,
         )?;
         self.blocks.push(block);
+        //MAJOR bug here! This assertion fails!
+        //assert!(self.old_utxo_set != self.utxo_set);
         self.utxo_set = new_utxo_set.clone();
         self.old_utxo_set = new_utxo_set;
 

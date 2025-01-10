@@ -44,6 +44,13 @@ impl User {
     }
 }
 
+pub fn try_public_from_str(public_key: &str) -> Result<PublicKey<Secp256k1>, ()> {
+    let encoded_point =
+        EncodedPoint::<Secp256k1>::from_bytes(hex::decode(public_key).unwrap().as_slice()).map_err(|_| ())?;
+
+    Ok(VerifyingKey::from_encoded_point(&encoded_point).unwrap().into())
+}
+
 pub fn keys_from_str(priv_key: &str) -> (SigningKey, VerifyingKey) {
     let signing_key =
         SigningKey::from_bytes(hex::decode(priv_key).unwrap().as_slice().into()).unwrap();

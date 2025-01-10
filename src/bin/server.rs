@@ -63,10 +63,12 @@ async fn main() {
                     },
                     Mined(block) => {
                         let mut state = state.lock().unwrap();
+                        let num_txs = block.txs.len();
                         if state.add_block_if_valid(block).is_ok() {
-                                println!("New block accepted");
                                 let mut new_txs = new_txs.lock().unwrap();
                                 new_txs.clear();
+                                assert!(state.verify_all_blocks().is_ok());
+                                //let mut block_clone = block.clone();
                                 //new_txs.retain(|item| !block_clone.txs.iter().any(|x| x == item));
                         } else {
                             println!("New block rejected");

@@ -9,7 +9,7 @@ use coin::frametype::*;
 use std::collections::HashMap;
 use std::fs;
 use tokio_tungstenite::{connect_async, tungstenite, tungstenite::protocol::Message};
-use tungstenite::{ http::{Method, Request}, client::*};
+use tungstenite::{http::{Method, Request}, client::*};
 use url::Url;
 use bincode::{serialize, deserialize};
 use bytes::Bytes;

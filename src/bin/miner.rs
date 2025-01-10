@@ -24,13 +24,11 @@ use tokio_util::codec::Framed;
 
 #[tokio::main]
 async fn main() {
-    // Connect to the server
     let url = format!("ws://{SERVER_IP}:{PORT}");
     let request = url.into_client_request().unwrap();
     let (ws_stream, _) = connect_async(request).await.unwrap();
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-    // Get version
     let frame = ClientFrame::GetVersion;
     let serialized = bincode::serialize(&frame).unwrap();
     ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
@@ -117,7 +115,7 @@ async fn main() {
         new_block.nonce = new_block.mine();
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 
-        println!("sending");
+        println!("Sending {} transactions", new_block.txs.len());
         let frame = ClientFrame::Mined(new_block);
         let serialized = bincode::serialize(&frame).unwrap();
         ws_sender.send(Message::Binary(Bytes::from(serialized))).await.unwrap();
