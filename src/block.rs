@@ -19,6 +19,7 @@ use std::fs;
 use std::hash::Hash;
 use std::os;
 use std::process::Output;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub type BlockHash = [u8; 32];
 pub const BLANK_BLOCK_HASH: [u8; 32] = [0; 32];
@@ -43,6 +44,8 @@ pub struct Block {
     //to a particular block, look into this
     pub version: u64,
     pub prev_hash: BlockHash,
+    //time at which the block was mined
+    pub time_stamp: u64,
     pub nonce: u64,
     pub txs: Vec<Tx>,
 }
@@ -237,6 +240,17 @@ impl State {
         balance
     }
 
+    //work as in the average nubmer of hashes needed to
+    //mine all these blocks
+    pub fn calc_total_work(&self) -> u64 {
+        let mut work = 0;
+
+        for block in &self.blocks {
+            work += u64::max_value() / block.get_work_amount();
+        }
+
+        work
+    }
 }
 
 //lol XD
@@ -250,7 +264,7 @@ impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
     //lower values are harder
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000;
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 100_000_000;
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
@@ -258,6 +272,7 @@ impl Block {
     pub fn new() -> Self {
         Self {
             version: 0,
+            time_stamp: 0,
             prev_hash: BLANK_BLOCK_HASH,
             nonce: 0,
             txs: Vec::new(),
@@ -409,14 +424,10 @@ impl Block {
 
     pub fn genesis_block() -> Self {
         let mut utxo_set = HashMap::new();
-        let my_verifying_key: VerifyingKey = vk_from_encoded_str("04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E8261ABE15BB1F1EC90871F5034A7B2BBF43F33C99225EF70C6F463B393973C55E85382F90F2935E").into();
+        let my_verifying_key: VerifyingKey = vk_from_encoded_str("04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E8261AB\
+            E15BB1F1EC90871F5034A7B2BBF43F33C99225EF70C6F463B393973C55E85382F90F2935E").into();
 
-        let mut block = Block {
-            version: 0,
-            prev_hash: BLANK_BLOCK_HASH,
-            nonce: 0,
-            txs: Vec::new(),
-        };
+        let mut block = Block::new();
 
         let public_key = PublicKey::from(my_verifying_key);
 
@@ -445,6 +456,7 @@ impl Block {
         block.txs.push(root_tx);
         block
     }
+
 }
 //
 
@@ -462,7 +474,9 @@ impl Block {
     pub fn as_bytes_no_nonce(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         // Convert prev_hash to bytes
+        bytes.extend_from_slice(&self.version.to_le_bytes());
         bytes.extend_from_slice(&self.prev_hash);
+        bytes.extend_from_slice(&self.time_stamp.to_le_bytes());
         //bytes.extend_from_slice(&self.nonce.to_be_bytes());
         // Convert txs to bytes
         for tx in &self.txs {

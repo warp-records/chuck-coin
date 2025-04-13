@@ -65,6 +65,7 @@ async fn main() {
                         let mut state = state.lock().unwrap();
                         let num_txs = block.txs.len();
                         if state.add_block_if_valid(block).is_ok() {
+                                println!("New block accepted");
                                 let mut new_txs = new_txs.lock().unwrap();
                                 new_txs.clear();
                                 assert!(state.verify_all_blocks().is_ok());

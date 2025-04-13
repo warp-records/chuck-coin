@@ -11,6 +11,7 @@ use futures::{SinkExt, StreamExt};
 use k256::ecdsa::Signature;
 use k256::{PublicKey, SecretKey};
 use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
 //use tokio_serde::{Serializer, Deserializer, Framed};
 use coin::block::*;
 use coin::frametype::*;
@@ -112,6 +113,11 @@ async fn main() {
                 new_block.txs.truncate(new_block.txs.len() - group.len());
             }
         }
+
+        new_block.time_stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        println!("Mininig...");
         new_block.nonce = new_block.mine();
         assert!(state.add_block_if_valid(new_block.clone()).is_ok());
 
