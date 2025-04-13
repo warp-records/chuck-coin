@@ -64,6 +64,8 @@ pub enum BlockErr {
     //given, expected
     PrevHash(BlockHash, BlockHash),
     GenesisBlock,
+    //min time, max time
+    TimeStamp(u64, u64),
 }
 
 //should probably rework this interface for clarity
@@ -103,8 +105,9 @@ impl State {
 
         utxo_set.insert(Outpoint(root_tx.txid, 0), root_tx.outputs[0].clone());
 
-        while let Some(block) = block_iter.next() {
-            utxo_set = self.verify_block(&utxo_set, prev_block, block, false)?;
+        for (i, block) in block_iter.enumerate() {
+
+            utxo_set = self.verify_block(&utxo_set, prev_block, block, self.median_time_stamp(Some(i)), false)?;
             prev_block = block;
         }
 
@@ -134,6 +137,19 @@ impl State {
         }
     }
 
+    pub fn median_time_stamp(&self, idx: Option<usize>) -> u64 {
+        //get the median timestamp of the last 11 blocks, which is how bitcoin
+        //calculates the minimum timestamp for each block
+        let end_idx = idx.unwrap_or(self.blocks.len());
+        let start_idx = end_idx.saturating_sub(10); // Ensure we don't go below 0
+        let mut timestamps: Vec<u64> = self.blocks[start_idx..end_idx]
+            .iter()
+            .map(|b| b.time_stamp)
+            .collect();
+        timestamps.sort_unstable();
+        timestamps[timestamps.len() / 2]
+    }
+
     //can't use this syntax for some reason
     //type UtxoSet = HashMap<Outpoint, TxOutput>;
     pub fn verify_block(
@@ -141,6 +157,7 @@ impl State {
         old_utxo_set: &HashMap<Outpoint, TxOutput>,
         prev_block: &Block,
         block: &Block,
+        min_time_stamp: u64,
         ignore_work: bool,
     ) -> Result<HashMap<Outpoint, TxOutput>, BlockErr> {
         let mut hasher = Sha3_256::new();
@@ -202,6 +219,13 @@ impl State {
             return Err(BlockErr::Nonce(block.nonce));
         }
 
+        let max_time_stamp = prev_block.time_stamp + 2*60*60;
+        if block.time_stamp < min_time_stamp ||
+            block.time_stamp > max_time_stamp {
+
+            return Err(BlockErr::TimeStamp(min_time_stamp, max_time_stamp));
+        }
+
         Ok(utxo_set)
     }
 
@@ -210,6 +234,7 @@ impl State {
             &self.old_utxo_set,
             &self.blocks.last().unwrap(),
             &block,
+            self.median_time_stamp(None),
             false,
         )?;
         self.blocks.push(block);

@@ -17,7 +17,6 @@ pub enum ClientFrame {
     GetLastHash,
     GetNewTxpool,
     GetVersion,
-
 }
 
 #[derive(Serialize, Deserialize)]

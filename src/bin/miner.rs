@@ -107,7 +107,7 @@ async fn main() {
             new_block.txs.extend(group.clone());
             //new_block.nonce = new_block.mine();
 
-            if let Ok(new_utxo_set) = state.verify_block(&utxo_set, &prev_block, &new_block, true) {
+            if let Ok(new_utxo_set) = state.verify_block(&utxo_set, &prev_block, &new_block, state.median_time_stamp(None), true) {
                 utxo_set = new_utxo_set;
             } else {
                 new_block.txs.truncate(new_block.txs.len() - group.len());
