@@ -35,6 +35,7 @@ mod tests {
 
     #[test]
     fn test_genesis_block_initialization() {
+        //println!("Work difficulty: {}", Block::WORK_DIFFICULTY);
         let genesis = Block::genesis_block();
         let state = State::with_genesis_block();
 
@@ -141,6 +142,79 @@ mod tests {
         assert!(
             state.add_block_if_valid(invalid_block).is_err(),
             "Block with invalid nonce should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_block_timestamp_validation() {
+        let mut state = State::with_genesis_block();
+        let (sender_priv, _) = genesis_keys();
+
+        // Override timestamps for deterministic testing
+        // Genesis block - t=1000
+        state.blocks[0].time_stamp = 1000;
+
+        // Add 2 more blocks to establish timestamp history
+        // Block 1 - t=2000
+        let mut block1 = Block::new();
+        block1.prev_hash = state.blocks[0].get_hash();
+        block1.time_stamp = 2000;
+        block1.nonce = block1.mine();
+        state.add_block_if_valid(block1).unwrap();
+
+        // Block 2 - t=3000 (now last block)
+        let mut block2 = Block::new();
+        block2.prev_hash = state.blocks.last().unwrap().get_hash();
+        block2.time_stamp = 3000;
+        block2.nonce = block2.mine();
+        state.add_block_if_valid(block2).unwrap();
+
+        // Test cases - previous block is at 3000
+        let min_timestamp = state.median_time_stamp(None); // Median of [1000, 2000, 3000] = 2000
+        let mut max_timestamp = 3000 + 2*60*60; // 3000 + 7200 = 10200
+
+        // Case 1: Too low (below median)
+        let mut bad_block_low = Block::new();
+        bad_block_low.prev_hash = state.blocks.last().unwrap().get_hash();
+        bad_block_low.time_stamp = min_timestamp - 1;
+        bad_block_low.nonce = bad_block_low.mine();
+        assert!(
+            state.add_block_if_valid(bad_block_low).is_err(),
+            "Should reject block below median timestamp"
+        );
+
+        // Case 2: Too high (above max)
+        let mut bad_block_high = Block::new();
+        bad_block_high.prev_hash = state.blocks.last().unwrap().get_hash();
+        bad_block_high.time_stamp = max_timestamp + 1;
+        bad_block_high.nonce = bad_block_high.mine();
+        assert!(
+            state.add_block_if_valid(bad_block_high).is_err(),
+            "Should reject block above max timestamp"
+        );
+
+        // Case 3: Exactly at minimum
+        let mut good_block_min = Block::new();
+        good_block_min.prev_hash = state.blocks.last().unwrap().get_hash();
+        good_block_min.time_stamp = min_timestamp;
+        good_block_min.nonce = good_block_min.mine();
+        assert!(
+            state.add_block_if_valid(good_block_min).is_ok(),
+            "Should accept block at exact median"
+        );
+
+        max_timestamp = state.blocks.last().unwrap().time_stamp + 2*60*60;
+
+        // Case 4: Exactly at maximum
+        let mut good_block_max = Block::new();
+        good_block_max.prev_hash = state.blocks.last().unwrap().get_hash();
+        good_block_max.time_stamp = max_timestamp;
+        good_block_max.nonce = good_block_max.mine();
+
+        let res = state.add_block_if_valid(good_block_max);
+        assert!(
+            res.is_ok(),
+            "Should accept block at exact max"
         );
     }
 }

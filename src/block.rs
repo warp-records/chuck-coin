@@ -289,7 +289,10 @@ impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
     //lower values are harder
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 100_000_000;
+    #[cfg(not(test))] pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000_000;
+
+    #[cfg(test)] pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10;
+
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;
     pub const TOTAL_SUPPLY: u64 = 420 * 1_000_000;
@@ -483,7 +486,6 @@ impl Block {
     }
 
 }
-//
 
 impl Hash for Block {
     //DONT hash nonce
