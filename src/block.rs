@@ -85,7 +85,7 @@ impl State {
         let mut utxo_set = HashMap::new();
         let mut block_iter = self.blocks.iter();
 
-        let mut prev_block = block_iter.next().expect("No blocks found");
+        let mut prev_block = block_iter.next().ok_or(BlockErr::GenesisBlock)?;
         let root_tx = prev_block.txs[0].clone();
         let my_verifying_key: VerifyingKey = vk_from_encoded_str(
             "04B0B5D59947A744C8ED5032F8B5EC77F56BFF09A724466397E82\
@@ -140,6 +140,7 @@ impl State {
     pub fn median_time_stamp(&self, idx: Option<usize>) -> u64 {
         //get the median timestamp of the last 11 blocks, which is how bitcoin
         //calculates the minimum timestamp for each block
+        if self.blocks.len() == 0 { return 0; }
         let end_idx = idx.unwrap_or(self.blocks.len());
         let start_idx = end_idx.saturating_sub(10); // Ensure we don't go below 0
         let mut timestamps: Vec<u64> = self.blocks[start_idx..end_idx]

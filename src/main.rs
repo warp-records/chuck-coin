@@ -54,7 +54,7 @@ fn main() {
         fs::write("state.bin", serialized).expect("Error writing to file");
         //fs::write("block.txt", serialized).expect("Error writing to file");
 
-        let serialized = fs::read("state.bin").expect("Errir reading file");
+        let serialized = fs::read("state.bin").expect("Error reading file");
         let state: State = bincode::deserialize(&serialized).expect("Error deserializing");
         let verify_result = state.verify_all_blocks();
         assert!(verify_result.is_ok());
