@@ -220,8 +220,8 @@ impl State {
         }
 
         let max_time_stamp = prev_block.time_stamp + 2*60*60;
-        if block.time_stamp < min_time_stamp ||
-            block.time_stamp > max_time_stamp {
+        if block.time_stamp < min_time_stamp /*||
+            block.time_stamp > max_time_stamp*/ {
 
             return Err(BlockErr::TimeStamp(min_time_stamp, max_time_stamp));
         }
@@ -297,7 +297,7 @@ impl Block {
 
     pub fn new() -> Self {
         Self {
-            version: 0,
+            version: 1,
             time_stamp: 0,
             prev_hash: BLANK_BLOCK_HASH,
             nonce: 0,

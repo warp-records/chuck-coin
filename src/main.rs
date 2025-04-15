@@ -34,7 +34,7 @@ fn main() {
         let new_block = Block::new();
 
         //use my own key here
-        let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
+        //let (signing, verifying) = keys_from_str(&fs::read_to_string("private_key.txt").unwrap());
 
         //there was a test here before
         /*
