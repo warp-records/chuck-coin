@@ -141,7 +141,7 @@ impl State {
         //get the median timestamp of the last 11 blocks, which is how bitcoin
         //calculates the minimum timestamp for each block
         if self.blocks.len() == 0 { return 0; }
-        let end_idx = idx.unwrap_or(self.blocks.len());
+        let end_idx = idx.unwrap_or(self.blocks.len()-1);
         let start_idx = end_idx.saturating_sub(10); // Ensure we don't go below 0
         let mut timestamps: Vec<u64> = self.blocks[start_idx..end_idx]
             .iter()
