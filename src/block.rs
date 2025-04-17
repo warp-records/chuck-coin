@@ -143,7 +143,7 @@ impl State {
         if self.blocks.len() == 0 { return 0; }
         let end_idx = idx.unwrap_or(self.blocks.len()-1);
         let start_idx = end_idx.saturating_sub(10); // Ensure we don't go below 0
-        let mut timestamps: Vec<u64> = self.blocks[start_idx..end_idx]
+        let mut timestamps: Vec<u64> = self.blocks[start_idx..=end_idx]
             .iter()
             .map(|b| b.time_stamp)
             .collect();
@@ -220,6 +220,7 @@ impl State {
             return Err(BlockErr::Nonce(block.nonce));
         }
 
+        //determine a better value later, disable for now
         let max_time_stamp = prev_block.time_stamp + 2*60*60;
         if block.time_stamp < min_time_stamp /*||
             block.time_stamp > max_time_stamp*/ {
@@ -290,7 +291,7 @@ impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
     //lower values are harder
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000_000;
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 1_000_000;
 
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;

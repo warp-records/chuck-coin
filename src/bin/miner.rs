@@ -101,6 +101,9 @@ async fn main() {
         new_block.prev_hash = state.blocks.last().unwrap().get_hash();
         let prev_block = &state.blocks.last().unwrap();
 
+        new_block.time_stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH).unwrap().as_secs();
+
         let mut utxo_set = state.old_utxo_set.clone();
         for group in tx_groups {
             //idk if I should clone this lol
@@ -114,8 +117,6 @@ async fn main() {
             }
         }
 
-        new_block.time_stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         println!("Mininig...");
         new_block.nonce = new_block.mine();
