@@ -34,7 +34,7 @@ mod tests {
     }
 
     #[test]
-    fn test_genesis_block_initialization() {
+    fn genesis_block_initialization() {
         //println!("Work difficulty: {}", Block::WORK_DIFFICULTY);
         let genesis = Block::genesis_block();
         let state = State::with_genesis_block();
@@ -48,7 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_transaction_flow() {
+    fn valid_transaction_flow() {
         let mut state = State::with_genesis_block();
         let (sender_priv, sender_pub) = genesis_keys();
         let recipient = User::random();
@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_transaction_overspend() {
+    fn invalid_transaction_overspend() {
         let mut state = State::with_genesis_block();
         let (sender_priv, _) = genesis_keys();
         let recipient = User::random();
@@ -96,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn test_utxo_set_update() {
+    fn utxo_set_update() {
         let mut state = State::with_genesis_block();
         let (sender_priv, _) = genesis_keys();
         let genesis_outpoint = Outpoint(state.blocks[0].txs[0].txid, 0);
@@ -116,7 +116,7 @@ mod tests {
 
     // Other tests remain the same as they don't depend on keys
     #[test]
-    fn test_block_mining_and_verification() {
+    fn block_mining_and_verification() {
         let mut block = Block::new();
         block.prev_hash = BLANK_BLOCK_HASH;
         block.time_stamp = SystemTime::now()
@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_rejection_bad_nonce() {
+    fn block_rejection_bad_nonce() {
         let mut state = State::with_genesis_block();
         let mut invalid_block = Block::new();
         invalid_block.prev_hash = state.blocks[0].get_hash();
@@ -146,7 +146,9 @@ mod tests {
     }
 
     #[test]
-    fn test_block_timestamp_validation() {
+    //maximum timestamps are temporarily disabled because there
+    //isn't an active userbase mining this
+    fn block_timestamp_validation() {
         let mut state = State::with_genesis_block();
         let (sender_priv, _) = genesis_keys();
 
@@ -184,6 +186,7 @@ mod tests {
         );
 
         // Case 2: Too high (above max)
+        /*
         let mut bad_block_high = Block::new();
         bad_block_high.prev_hash = state.blocks.last().unwrap().get_hash();
         bad_block_high.time_stamp = max_timestamp + 1;
@@ -192,7 +195,7 @@ mod tests {
             state.add_block_if_valid(bad_block_high).is_err(),
             "Should reject block above max timestamp"
         );
-
+ */
         // Case 3: Exactly at minimum
         let mut good_block_min = Block::new();
         good_block_min.prev_hash = state.blocks.last().unwrap().get_hash();
@@ -206,6 +209,7 @@ mod tests {
         max_timestamp = state.blocks.last().unwrap().time_stamp + 2*60*60;
 
         // Case 4: Exactly at maximum
+        /*
         let mut good_block_max = Block::new();
         good_block_max.prev_hash = state.blocks.last().unwrap().get_hash();
         good_block_max.time_stamp = max_timestamp;
@@ -215,6 +219,9 @@ mod tests {
         assert!(
             res.is_ok(),
             "Should accept block at exact max"
-        );
+        ); */
+
     }
+
+
 }
