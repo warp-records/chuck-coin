@@ -292,7 +292,7 @@ impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
     //lower values are harder
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000;
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 1_000_000;
     //TODO: dynamic mining reward function
     pub const MINING_REWARD: u64 = 1_000;
 

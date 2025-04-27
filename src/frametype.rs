@@ -34,4 +34,4 @@ pub enum ServerFrame {
 
 //should probably move this to a config file
 pub const PORT: u16 = 1337;
-pub const SERVER_IP: &str = "127.0.0.1";//"129.213.163.237";
+pub const SERVER_IP: &str = "129.213.163.237";
