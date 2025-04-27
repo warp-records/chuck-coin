@@ -167,7 +167,7 @@ impl State {
         let mut input_total: u64 = 0;
         let mut output_total: u64 = 0;
 
-        for tx in &block.txs {
+        for tx in &block.txs{
             //TODO: verify tx signature
 
             for input in tx.inputs.iter() {
@@ -211,7 +211,7 @@ impl State {
                 utxo_set.remove(&input.prev_out);
             }
 
-            if output_total > input_total {
+            if output_total > input_total + Block::MINING_REWARD {
                 return Err(BlockErr::Overspend(input_total, output_total));
             }
         }
@@ -278,6 +278,7 @@ impl State {
 
         work
     }
+
 }
 
 //lol XD
@@ -291,7 +292,9 @@ impl Block {
     //This is all my i7 can do quickly ToT
     //temporarily make it really easy for testing
     //lower values are harder
-    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 1_000_000;
+    pub const WORK_DIFFICULTY: u64 = u64::max_value() / 10_000;
+    //TODO: dynamic mining reward function
+    pub const MINING_REWARD: u64 = 1_000;
 
     //one pizza is one one millionth of a coin, or 1/10^6
     pub const START_SUPPLY: u64 = 69 * 1_000_000;

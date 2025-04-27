@@ -49,7 +49,9 @@ pub struct Tx {
     //tx.inputs.as_bytes()
     //tx.outputs.as_bytes()
     pub txid: Txid,
+
     //signature of txid, which is the hash
+    //did we ever verify this?!? this might be redundant
     pub signature: Signature,
 }
 

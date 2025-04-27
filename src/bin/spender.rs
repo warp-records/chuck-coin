@@ -71,6 +71,7 @@ async fn main() {
            fs::write("state.bin", serialized).expect("Error writing to file");
            network_state
     } else {
+        local_state.verify_all_and_update().expect("Local state is invalid");
         local_state
     };
 
